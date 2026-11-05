@@ -164,7 +164,10 @@ class MenuConsole:
                 return
             self._titulo(f"Pesquisa: {_cortar(pesquisa.titulo, 40)} [{STATUS[pesquisa.status]}]")
             self.saida(f"Objetivo: {pesquisa.objetivo}\n")
-            self.saida("1. Registrar interação\n2. Listar interações\n3. Ver uma interação (pergunta e resposta)\n0. Voltar")
+            self.saida(
+                "1. Registrar interação\n2. Listar interações\n3. Ver uma interação (pergunta e resposta)\n"
+                "4. Editar título e objetivo\n0. Voltar"
+            )
             opcao = self._ler("Escolha")
             if opcao == "0":
                 return
@@ -174,8 +177,18 @@ class MenuConsole:
                 self._seguro(self._listar_interacoes, pesquisa_id)
             elif opcao == "3":
                 self._seguro(self._ver_interacao, pesquisa_id)
+            elif opcao == "4":
+                self._seguro(self._editar_pesquisa, pesquisa_id)
             else:
                 self.saida("Opção inválida.")
+
+    def _editar_pesquisa(self, pesquisa_id):  # RF08
+        atual = self.pesquisas.obter(pesquisa_id)
+        self.saida("Deixe em branco (Enter) para manter o valor atual.")
+        titulo = self._ler(f"Novo título [{_cortar(atual.titulo, 40)}]") or atual.titulo
+        objetivo = self._ler(f"Novo objetivo [{_cortar(atual.objetivo, 40)}]") or atual.objetivo
+        pesquisa = self.pesquisas.editar(pesquisa_id, titulo, objetivo)
+        self.saida(f"\nPesquisa atualizada: {pesquisa.titulo}")
 
     def _registrar_interacao(self, pesquisa_id):  # RF11
         ferramenta = self._ler("Ferramenta de IA (ex.: ChatGPT, Claude, Gemini)")
