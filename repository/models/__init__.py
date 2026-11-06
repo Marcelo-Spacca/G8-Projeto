@@ -1,5 +1,3 @@
-# Importar todas as classes aqui garante que o SQLAlchemy conhece todas as tabelas
-# e consegue resolver as relações entre elas. Ao criar um model novo, adicione-o aqui.
 from repository.models.fonte import Fonte
 from repository.models.interacao import Interacao
 from repository.models.pesquisa import Pesquisa

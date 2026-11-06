@@ -1,205 +1,275 @@
-"""Menu de texto para testar os services na prática."""
-import getpass
+"""Menu de console. Só lê o que o usuário digita, chama os services e mostra o resultado."""
 
-from services.erros import RegraViolada
-from services.interacao_service import InteracaoService
-from services.pesquisa_service import PesquisaService
-from services.sessao import sessao
-from services.usuario_service import UsuarioService
+from getpass import getpass
 
-STATUS = {"em_andamento": "Em andamento", "concluida": "Concluída"}
-LINHA = "=" * 56
-FIM = "FIM"
+from services.servicos import (
+    ConteudoRelatorio,
+    FonteService,
+    InteracaoService,
+    PesquisaService,
+    RegraViolada,
+    RelatorioService,
+    UsuarioService,
+)
+
+STATUS_LEGIVEL = {
+    "nao_verificada": "não verificada",
+    "verificada": "verificada",
+    "incorreta": "incorreta",
+}
 
 
-def _cortar(texto, limite):
-    texto = " ".join(texto.split())
-    return texto if len(texto) <= limite else texto[: limite - 3] + "..."
+# --------------------------------------------------------------------------- entrada
 
 
-def _data(valor):
-    return valor.strftime("%d/%m/%Y %H:%M")
+def ler_texto_longo(rotulo: str) -> str:
+    print(f"{rotulo} (termine com uma linha contendo só FIM):")
+    linhas = []
+    while (linha := input()) != "FIM":
+        linhas.append(linha)
+    return "\n".join(linhas)
+
+
+def ler_int(rotulo: str) -> int | None:
+    valor = input(rotulo).strip()
+    return int(valor) if valor.isdigit() else None
+
+
+def confirmar(pergunta: str) -> bool:
+    return input(f"{pergunta} (s/n): ").strip().lower() in ("s", "sim")
+
+
+# --------------------------------------------------------------------------- menu
 
 
 class MenuConsole:
-    # entrada, saida e senha podem ser trocadas nos testes automáticos
-    def __init__(self, entrada=input, saida=print, senha=getpass.getpass):
-        self.entrada = entrada
-        self.saida = saida
-        self.senha = senha
+    def __init__(self):
         self.usuarios = UsuarioService()
         self.pesquisas = PesquisaService()
         self.interacoes = InteracaoService()
+        self.fontes = FonteService()
+        self.relatorios = RelatorioService()
+        self.usuario = None
 
-    # ------------------------------------------------------------ utilitários
-    def _ler(self, rotulo):
-        return self.entrada(f"{rotulo}: ").strip()
-
-    def _ler_texto(self, rotulo):
-        self.saida(f"{rotulo} (digite ou cole; termine com uma linha só com {FIM}):")
-        linhas = []
-        while True:
-            linha = self.entrada("> ")
-            if linha.strip().upper() == FIM:
-                return "\n".join(linhas)
-            linhas.append(linha)
-
-    def _titulo(self, texto):
-        self.saida(f"\n{LINHA}\n {texto}\n{LINHA}")
-
-    def _seguro(self, acao, *args):
-        try:
-            return acao(*args)
-        except RegraViolada as erro:
-            self.saida(f"\n[ERRO] {erro}")
-        except (EOFError, KeyboardInterrupt):
-            raise
-        except Exception as erro:  # banco fora do ar, .env errado, bug...
-            primeira_linha = (str(erro).splitlines() or [""])[0]
-            self.saida(f"\n[ERRO INESPERADO] {type(erro).__name__}: {primeira_linha}")
-            self.saida("Se for de conexão, confira se o PostgreSQL está rodando e o arquivo .env.")
-
-    def _escolher_numero(self, itens, rotulo):
-        resposta = self._ler(f"{rotulo} (Enter para voltar)")
-        if not resposta:
-            return None
-        if not resposta.isdigit() or not 1 <= int(resposta) <= len(itens):
-            self.saida("Número inválido.")
-            return None
-        return itens[int(resposta) - 1]
-
-    # ------------------------------------------------------------ menu inicial
     def executar(self):
-        try:
-            self._menu_inicial()
-        except (EOFError, KeyboardInterrupt):
-            self.saida("\nAté logo!")
-
-    def _menu_inicial(self):
-        while True:
-            self._titulo("Registro verificável do uso de IA (console)")
-            self.saida("1. Cadastrar\n2. Entrar\n0. Sair do programa")
-            opcao = self._ler("Escolha")
-            if opcao == "1":
-                self._seguro(self._cadastrar)
-            elif opcao == "2":
-                self._seguro(self._entrar)
-                if sessao.logado:
-                    self._menu_logado()
-            elif opcao == "0":
-                self.saida("Até logo!")
-                return
-            else:
-                self.saida("Opção inválida.")
-
-    def _cadastrar(self):  # RF01
-        nome = self._ler("Nome")
-        email = self._ler("E-mail")
-        senha = self.senha("Senha (mínimo 6 caracteres): ")
-        perfil = self._ler("Perfil (1 = aluno, 2 = professor)")
-        tipo = {"1": "aluno", "2": "professor"}.get(perfil, "")
-        usuario = self.usuarios.cadastrar(nome, email, senha, tipo)
-        self.saida(f"\nConta criada: {usuario.nome} <{usuario.email}> ({usuario.tipo}). Agora escolha 'Entrar'.")
-
-    def _entrar(self):  # RF02
-        email = self._ler("E-mail")
-        senha = self.senha("Senha: ")
-        usuario = self.usuarios.entrar(email, senha)
-        self.saida(f"\nBem-vindo(a), {usuario.nome}!")
-
-    # ------------------------------------------------------------ usuário logado
-    def _menu_logado(self):
-        usuario = sessao.usuario
-        while sessao.logado:
-            self._titulo(f"Olá, {usuario.nome} ({usuario.tipo})")
-            if usuario.tipo == "aluno":
-                self.saida("1. Criar pesquisa\n2. Listar minhas pesquisas\n3. Abrir uma pesquisa\n0. Sair da conta")
-            else:
-                self.saida("(A área do professor ainda não foi implementada.)\n0. Sair da conta")
-            opcao = self._ler("Escolha")
-            if opcao == "0":
-                self.usuarios.sair()
-                self.saida("Você saiu da conta.")
-                return
-            if usuario.tipo == "aluno" and opcao == "1":
-                self._seguro(self._criar_pesquisa)
-            elif usuario.tipo == "aluno" and opcao == "2":
-                self._seguro(self._listar_pesquisas)
-            elif usuario.tipo == "aluno" and opcao == "3":
-                self._seguro(self._abrir_pesquisa)
-            else:
-                self.saida("Opção inválida.")
-
-    def _criar_pesquisa(self):  # RF06
-        titulo = self._ler("Título da pesquisa")
-        objetivo = self._ler("Objetivo da pesquisa")
-        pesquisa = self.pesquisas.criar(titulo, objetivo)
-        self.saida(f"\nPesquisa criada: {pesquisa.titulo} [{STATUS[pesquisa.status]}]")
-
-    def _listar_pesquisas(self):  # RF07
-        lista = self.pesquisas.listar_minhas()
-        if not lista:
-            self.saida("\nVocê ainda não criou nenhuma pesquisa.")
-            return lista
-        self.saida(f"\n{'Nº':>3}  {'Título':<34} {'Status':<13} Criada em")
-        for n, p in enumerate(lista, 1):
-            self.saida(f"{n:>3}  {_cortar(p.titulo, 34):<34} {STATUS[p.status]:<13} {_data(p.data_criacao)}")
-        return lista
-
-    def _abrir_pesquisa(self):
-        lista = self._listar_pesquisas()
-        if not lista:
-            return
-        pesquisa = self._escolher_numero(lista, "Número da pesquisa")
-        if pesquisa:
-            self._menu_pesquisa(pesquisa.id)
-
-    # ------------------------------------------------------------ dentro de uma pesquisa
-    def _menu_pesquisa(self, pesquisa_id):
         while True:
             try:
-                pesquisa = self.pesquisas.obter(pesquisa_id)
-            except RegraViolada as erro:
-                self.saida(f"\n[ERRO] {erro}")
+                if self.usuario is None:
+                    if not self.menu_inicial():
+                        break
+                elif self.usuario.tipo == "aluno":
+                    self.menu_aluno()
+                else:
+                    self.menu_professor()
+            except RegraViolada as e:
+                print(f"\n[!] {e}\n")
+            except (KeyboardInterrupt, EOFError):
+                print("\nAté logo!")
+                break
+
+    # ---------------------------------------------------------------- início
+
+    def menu_inicial(self) -> bool:
+        print("\n=== Registro verificável do uso de IA ===")
+        print("1) Cadastrar\n2) Entrar\n0) Sair")
+        op = input("> ").strip()
+        if op == "1":
+            nome = input("Nome: ")
+            email = input("E-mail: ")
+            senha = getpass("Senha: ")
+            tipo = "professor" if input("Tipo (a=aluno, p=professor): ").strip() == "p" else "aluno"
+            self.usuarios.cadastrar(nome, email, senha, tipo)
+            print("Cadastro feito! Agora é só entrar.")
+        elif op == "2":
+            self.usuario = self.usuarios.entrar(input("E-mail: "), getpass("Senha: "))
+            print(f"Olá, {self.usuario.nome}!")
+        elif op == "0":
+            return False
+        return True
+
+    # ---------------------------------------------------------------- aluno
+
+    def menu_aluno(self):
+        print("\n--- Menu do aluno ---")
+        print("1) Criar pesquisa\n2) Minhas pesquisas\n3) Abrir pesquisa\n0) Sair da conta")
+        op = input("> ").strip()
+        if op == "1":
+            p = self.pesquisas.criar(
+                self.usuario.id, input("Título: "), ler_texto_longo("Objetivo")
+            )
+            print(f"Pesquisa #{p.id} criada (o relatório dela é gerado automaticamente).")
+        elif op == "2":
+            self.listar_pesquisas()
+        elif op == "3":
+            self.listar_pesquisas()
+            pid = ler_int("Número da pesquisa: ")
+            if pid:
+                self.menu_pesquisa(pid)
+        elif op == "0":
+            self.usuario = None
+
+    def listar_pesquisas(self):
+        pesquisas = self.pesquisas.listar_do_aluno(self.usuario.id)
+        if not pesquisas:
+            print("Nenhuma pesquisa ainda.")
+        for p in pesquisas:
+            print(f"  #{p.id} {p.titulo} [{p.status}]")
+
+    def menu_pesquisa(self, pesquisa_id: int):
+        while True:
+            interacoes = self.interacoes.listar(self.usuario.id, pesquisa_id)
+            print(f"\n--- Pesquisa #{pesquisa_id} ---")
+            for i in interacoes:
+                print(f"  #{i.id} [{i.ferramenta_ia}] {resumo(i.pergunta)} ({len(i.fontes)} fonte(s))")
+            print(
+                "1) Registrar interação\n2) Abrir interação\n3) Ver relatório desta pesquisa\n0) Voltar"
+            )
+            op = input("> ").strip()
+            if op == "1":
+                ferramenta = input("Ferramenta de IA (ex.: ChatGPT): ")
+                pergunta = ler_texto_longo("Pergunta")
+                resposta = ler_texto_longo("Resposta da IA")
+                fontes = ler_texto_longo("Fontes citadas pela IA, uma por linha")
+                i = self.interacoes.registrar(
+                    self.usuario.id, pesquisa_id, ferramenta, pergunta, resposta, fontes.splitlines()
+                )
+                print(f"Interação #{i.id} registrada.")
+            elif op == "2":
+                iid = ler_int("Número da interação: ")
+                if iid:
+                    self.menu_interacao(iid)
+            elif op == "3":
+                mostrar_relatorio(self.relatorios.gerar(self.usuario, pesquisa_id))
+            elif op == "0":
                 return
-            self._titulo(f"Pesquisa: {_cortar(pesquisa.titulo, 40)} [{STATUS[pesquisa.status]}]")
-            self.saida(f"Objetivo: {pesquisa.objetivo}\n")
-            self.saida("1. Registrar interação\n2. Listar interações\n3. Ver uma interação (pergunta e resposta)\n0. Voltar")
-            opcao = self._ler("Escolha")
-            if opcao == "0":
+
+    def menu_interacao(self, interacao_id: int):
+        while True:
+            i = self.interacoes.obter(self.usuario.id, interacao_id)
+            mostrar_interacao(i)
+            print(
+                "1) Editar interação\n2) Excluir interação\n3) Adicionar fonte\n"
+                "4) Verificar fonte\n5) Ligar outro trecho a uma fonte verificada\n0) Voltar"
+            )
+            op = input("> ").strip()
+            if op == "1":  # RF13
+                print("Deixe em branco (ou só FIM) para manter o valor atual.")
+                ferramenta = input(f"Ferramenta de IA [{i.ferramenta_ia}]: ")
+                pergunta = ler_texto_longo("Nova pergunta")
+                resposta = ler_texto_longo("Nova resposta")
+                self.interacoes.editar(self.usuario.id, i.id, ferramenta, pergunta, resposta)
+                print("Interação atualizada. As fontes ligadas foram mantidas.")
+            elif op == "2":  # RF14
+                aviso = f" e suas {len(i.fontes)} fonte(s)" if i.fontes else ""
+                if confirmar(f"Excluir a interação #{i.id}{aviso}? Isso não pode ser desfeito"):
+                    self.interacoes.excluir(self.usuario.id, i.id)
+                    print("Interação excluída.")
+                    return
+                print("Exclusão cancelada.")
+            elif op == "3":
+                self.fontes.adicionar(self.usuario.id, i.id, input("Referência da fonte: "))
+                print("Fonte adicionada.")
+            elif op == "4":  # RF26 + RF18
+                fid = ler_int("Número da fonte: ")
+                if not fid:
+                    continue
+                verificada = input("A fonte é válida? (s = verificada, n = incorreta): ").strip().lower()
+                status = "verificada" if verificada in ("s", "sim") else "incorreta"
+                anotacao = ler_texto_longo("Anotação sobre o que você encontrou (opcional)")
+                trecho = local = None
+                if status == "verificada" and confirmar("Quer ligar esta fonte a um trecho do seu texto?"):
+                    trecho = ler_texto_longo("Trecho do seu texto")
+                    local = input("Onde está o trecho (parágrafo/linha, opcional): ")
+                self.fontes.verificar(self.usuario.id, fid, status, anotacao, trecho, local)
+                print("Verificação salva.")
+            elif op == "5":  # RF26
+                fid = ler_int("Número da fonte: ")
+                if fid:
+                    self.fontes.vincular_trecho(
+                        self.usuario.id,
+                        fid,
+                        ler_texto_longo("Trecho do seu texto"),
+                        input("Onde está o trecho (parágrafo/linha, opcional): "),
+                    )
+                    print("Trecho ligado à fonte.")
+            elif op == "0":
                 return
-            elif opcao == "1":
-                self._seguro(self._registrar_interacao, pesquisa_id)
-            elif opcao == "2":
-                self._seguro(self._listar_interacoes, pesquisa_id)
-            elif opcao == "3":
-                self._seguro(self._ver_interacao, pesquisa_id)
-            else:
-                self.saida("Opção inválida.")
 
-    def _registrar_interacao(self, pesquisa_id):  # RF11
-        ferramenta = self._ler("Ferramenta de IA (ex.: ChatGPT, Claude, Gemini)")
-        pergunta = self._ler_texto("Pergunta")
-        resposta = self._ler_texto("Resposta da IA")
-        self.interacoes.registrar(pesquisa_id, ferramenta, pergunta, resposta)
-        self.saida("\nInteração registrada.")
+    # ---------------------------------------------------------------- professor
 
-    def _listar_interacoes(self, pesquisa_id):  # RF12
-        lista = self.interacoes.listar(pesquisa_id)
-        if not lista:
-            self.saida("\nNenhuma interação registrada nesta pesquisa.")
-            return lista
-        self.saida(f"\n{'Nº':>3}  {'Registrada em':<16} {'Ferramenta':<12} Pergunta")
-        for n, i in enumerate(lista, 1):
-            self.saida(f"{n:>3}  {_data(i.data_registro):<16} {_cortar(i.ferramenta_ia, 12):<12} {_cortar(i.pergunta, 40)}")
-        return lista
+    def menu_professor(self):
+        print("\n--- Menu do professor ---")
+        print("1) Listar pesquisas\n2) Ver relatório de uma pesquisa\n0) Sair da conta")
+        op = input("> ").strip()
+        if op == "1":
+            for p in self.pesquisas.listar_todas():
+                print(f"  #{p.id} {p.titulo} — {p.aluno.nome} [{p.status}]")
+        elif op == "2":
+            pid = ler_int("Número da pesquisa: ")
+            if pid:
+                mostrar_relatorio(self.relatorios.gerar(self.usuario, pid))
+        elif op == "0":
+            self.usuario = None
 
-    def _ver_interacao(self, pesquisa_id):
-        lista = self._listar_interacoes(pesquisa_id)
-        if not lista:
-            return
-        interacao = self._escolher_numero(lista, "Número da interação")
-        if interacao:
-            self.saida(f"\n{LINHA}")
-            self.saida(f"Ferramenta: {interacao.ferramenta_ia}   |   Registrada em: {_data(interacao.data_registro)}")
-            self.saida(f"{LINHA}\nPERGUNTA:\n{interacao.pergunta}\n\nRESPOSTA DA IA:\n{interacao.resposta}\n{LINHA}")
+
+# --------------------------------------------------------------------------- exibição
+
+
+def resumo(texto: str, n: int = 60) -> str:
+    texto = " ".join(texto.split())
+    return texto if len(texto) <= n else texto[: n - 1] + "…"
+
+
+def mostrar_interacao(i):
+    """RF27: cada fonte aparece com os trechos ligados a ela ao lado."""
+    print(f"\n=== Interação #{i.id} — {i.ferramenta_ia} ===")
+    print(f"Pergunta:\n{i.pergunta}\n")
+    print(f"Resposta:\n{i.resposta}\n")
+    print("Fontes:")
+    if not i.fontes:
+        print("  (nenhuma)")
+    for f in sorted(i.fontes, key=lambda f: f.id):
+        print(f"  #{f.id} {f.referencia}  [{STATUS_LEGIVEL[f.status]}]")
+        if f.anotacao_correcao:
+            print(f"      Anotação: {f.anotacao_correcao}")
+        for t in f.trechos:
+            onde = f" ({t.localizacao})" if t.localizacao else ""
+            print(f"      ↳ Trecho{onde}: \"{t.trecho_citado}\"")
+    print()
+
+
+def formatar_relatorio(r: ConteudoRelatorio) -> str:
+    linhas = [
+        f"RELATÓRIO DE USO DE IA — #{r.relatorio_id}",
+        f"Pesquisa #{r.pesquisa_id}: {r.titulo}",
+        f"Aluno: {r.aluno}",
+        f"Gerado em: {r.data_geracao:%d/%m/%Y %H:%M}",
+        f"Objetivo: {r.objetivo}",
+        "",
+    ]
+    c = r.contagem_status()
+    linhas.append(
+        f"Resumo: {len(r.interacoes)} interação(ões), {r.total_fontes} fonte(s) — "
+        f"{c['verificada']} verificada(s), {c['incorreta']} incorreta(s), "
+        f"{c['nao_verificada']} não verificada(s)."
+    )
+    for n, i in enumerate(r.interacoes, 1):
+        linhas += [
+            "",
+            f"[{n}] {i.ferramenta_ia} — {i.data_registro:%d/%m/%Y %H:%M}",
+            f"  Pergunta: {i.pergunta}",
+            f"  Resposta: {i.resposta}",
+            "  Fontes:" if i.fontes else "  Fontes: (nenhuma)",
+        ]
+        for f in i.fontes:
+            linhas.append(f"    - {f.referencia} [{STATUS_LEGIVEL.get(f.status, f.status)}]")
+            if f.anotacao:
+                linhas.append(f"        Anotação do aluno: {f.anotacao}")
+            for t in f.trechos:
+                onde = f" ({t.localizacao})" if t.localizacao else ""
+                linhas.append(f"        Trecho{onde}: \"{t.texto}\"")
+    return "\n".join(linhas)
+
+
+def mostrar_relatorio(r: ConteudoRelatorio):
+    print("\n" + formatar_relatorio(r) + "\n")
