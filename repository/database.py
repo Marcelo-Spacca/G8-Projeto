@@ -1,12 +1,12 @@
 import os
- 
+
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
- 
-load_dotenv()
- 
+
+load_dotenv()  # lê o arquivo .env
+
 url = URL.create(
     "postgresql+psycopg",
     username=os.getenv("DB_USER"),
@@ -15,11 +15,13 @@ url = URL.create(
     port=int(os.getenv("DB_PORT", "5432")),
     database=os.getenv("DB_NAME"),
 )
- 
+
 engine = create_engine(url)
-Session = sessionmaker(engine, expire_on_commit=False)
- 
- 
+
+# expire_on_commit=False: depois do commit, o objeto continua legível mesmo com a
+# sessão fechada (sem isso, ler usuario.nome dá DetachedInstanceError).
+Session = sessionmaker(engine, expire_on_commit=False)  # uso: with Session() as s: ...
+
+
 class Base(DeclarativeBase):
-    """Todas as classes de models.py herdam desta."""
- 
+    """Todas as classes de models/ herdam desta."""

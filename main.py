@@ -1,4 +1,9 @@
 from ui.menu_console import MenuConsole
 
-if __name__ == "__main__":
+
+def main():
     MenuConsole().executar()
+
+
+if __name__ == "__main__":
+    main()
