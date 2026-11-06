@@ -17,8 +17,10 @@ from sqlalchemy import create_engine, text  # noqa: E402
 
 from repository.database import Base, engine, url  # noqa: E402
 import repository.models  # noqa: E402,F401
+from services.fonte_service import FonteService  # noqa: E402
 from services.interacao_service import InteracaoService  # noqa: E402
 from services.pesquisa_service import PesquisaService  # noqa: E402
+from services.relatorio_service import RelatorioService  # noqa: E402
 from services.sessao import sessao  # noqa: E402
 from services.usuario_service import UsuarioService  # noqa: E402
 
@@ -74,6 +76,16 @@ def pesquisas():
 @pytest.fixture
 def interacoes():
     return InteracaoService()
+
+
+@pytest.fixture
+def fontes():
+    return FonteService()
+
+
+@pytest.fixture
+def relatorios():
+    return RelatorioService()
 
 
 @pytest.fixture

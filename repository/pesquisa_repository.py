@@ -1,4 +1,5 @@
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from repository.database import Session
 from repository.models import Pesquisa
@@ -14,6 +15,16 @@ class PesquisaRepository:
     def buscar_por_id(self, pesquisa_id):
         with Session() as s:
             return s.get(Pesquisa, pesquisa_id)
+
+    def listar_todas(self):
+        """Todas as pesquisas com o nome do aluno (área do professor), mais recentes primeiro."""
+        with Session() as s:
+            consulta = (
+                select(Pesquisa)
+                .options(selectinload(Pesquisa.aluno))
+                .order_by(Pesquisa.data_criacao.desc(), Pesquisa.id.desc())
+            )
+            return list(s.scalars(consulta))
 
     def listar_por_aluno(self, aluno_id):
         """Pesquisas do aluno, da mais recente para a mais antiga."""
