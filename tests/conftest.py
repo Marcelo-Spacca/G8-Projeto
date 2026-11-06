@@ -1,88 +1,113 @@
-"""Configuração dos testes.
+"""Testes no PostgreSQL, num banco separado (padrão: projeto1_teste).
 
-IMPORTANTE: os testes APAGAM os dados do banco que usam. Por isso eles nunca usam o banco de
-desenvolvimento (DB_NAME do .env): usam um banco separado, 'projeto1_teste' por padrão (ou o
-valor de DB_NAME_TESTE no .env). Se o banco de teste ainda não existir, ele é criado aqui.
+O banco é criado automaticamente se não existir; o usuário do .env precisa ter
+permissão para criar bancos. O banco principal (DB_NAME) nunca é tocado.
 """
+
 import os
 
 import pytest
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, func, select, text
+from sqlalchemy.engine import URL
+from sqlalchemy.orm import sessionmaker
 
-# 1) Troca o nome do banco ANTES de qualquer import do repository.
+import repository.models  # noqa: F401  (registra os models em Base)
+from repository.database import Base
+from services.servicos import (
+    FonteService,
+    InteracaoService,
+    PesquisaService,
+    RelatorioService,
+    UsuarioService,
+)
+
 load_dotenv()
-os.environ["DB_NAME"] = os.getenv("DB_NAME_TESTE", "projeto1_teste")
 
-from sqlalchemy import create_engine, text  # noqa: E402
-
-from repository.database import Base, engine, url  # noqa: E402
-import repository.models  # noqa: E402,F401
-from services.interacao_service import InteracaoService  # noqa: E402
-from services.pesquisa_service import PesquisaService  # noqa: E402
-from services.sessao import sessao  # noqa: E402
-from services.usuario_service import UsuarioService  # noqa: E402
+NOME_BANCO_TESTE = os.getenv("DB_NAME_TESTE", "projeto1_teste")
+if not NOME_BANCO_TESTE.endswith("_teste"):
+    raise RuntimeError(
+        f"DB_NAME_TESTE='{NOME_BANCO_TESTE}' precisa terminar com '_teste' (proteção do banco real)."
+    )
 
 
-def _criar_banco_se_nao_existe():
-    admin = create_engine(url.set(database="postgres"), isolation_level="AUTOCOMMIT")
+def _url(banco: str) -> URL:
+    return URL.create(
+        "postgresql+psycopg",
+        username=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        host=os.getenv("DB_HOST", "localhost"),
+        port=int(os.getenv("DB_PORT", "5432")),
+        database=banco,
+    )
+
+
+def _garantir_banco_teste() -> None:
+    admin = create_engine(_url("postgres"), isolation_level="AUTOCOMMIT")
     try:
-        with admin.connect() as conexao:
-            existe = conexao.execute(
-                text("SELECT 1 FROM pg_database WHERE datname = :nome"), {"nome": url.database}
-            ).scalar()
+        with admin.connect() as c:
+            existe = c.scalar(
+                text("SELECT 1 FROM pg_database WHERE datname = :n"), {"n": NOME_BANCO_TESTE}
+            )
             if not existe:
-                conexao.execute(text(f'CREATE DATABASE "{url.database}"'))
+                c.execute(text(f'CREATE DATABASE "{NOME_BANCO_TESTE}"'))
     finally:
         admin.dispose()
 
 
-@pytest.fixture(scope="session", autouse=True)
-def banco_de_teste():
-    # Trava de segurança: nunca apagar um banco que não seja claramente de teste.
-    assert url.database.endswith("_teste"), (
-        f"O banco de testes precisa terminar com '_teste' (veio '{url.database}'). "
-        "Ajuste DB_NAME_TESTE no .env."
+@pytest.fixture(scope="session")
+def engine():
+    _garantir_banco_teste()
+    eng = create_engine(_url(NOME_BANCO_TESTE))
+    Base.metadata.drop_all(eng)  # recria as tabelas para refletir os models atuais
+    Base.metadata.create_all(eng)
+    yield eng
+    eng.dispose()
+
+
+@pytest.fixture
+def sf(engine):
+    """Cada teste começa com as tabelas vazias."""
+    tabelas = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
+    with engine.begin() as c:
+        c.execute(text(f"TRUNCATE {tabelas} RESTART IDENTITY CASCADE"))
+    return sessionmaker(engine, expire_on_commit=False)
+
+
+@pytest.fixture
+def svc(sf):
+    class S:
+        usuarios = UsuarioService(sf)
+        pesquisas = PesquisaService(sf)
+        interacoes = InteracaoService(sf)
+        fontes = FonteService(sf)
+        relatorios = RelatorioService(sf)
+
+    return S
+
+
+@pytest.fixture
+def aluno(svc):
+    return svc.usuarios.cadastrar("Ana", "ana@ex.com", "segredo1", "aluno")
+
+
+@pytest.fixture
+def professor(svc):
+    return svc.usuarios.cadastrar("Prof", "prof@ex.com", "segredo1", "professor")
+
+
+@pytest.fixture
+def pesquisa(svc, aluno):
+    return svc.pesquisas.criar(aluno.id, "Fotossíntese", "Entender a fase clara")
+
+
+@pytest.fixture
+def interacao(svc, aluno, pesquisa):
+    return svc.interacoes.registrar(
+        aluno.id, pesquisa.id, "ChatGPT", "O que é?", "É um processo...", ["Livro A", "Artigo B"]
     )
-    _criar_banco_se_nao_existe()
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
-    yield
-    engine.dispose()
 
 
-@pytest.fixture(autouse=True)
-def banco_limpo(banco_de_teste):
-    """Cada teste começa com as tabelas vazias e ninguém logado."""
-    tabelas = ", ".join(t.name for t in Base.metadata.sorted_tables)
-    with engine.begin() as conexao:
-        conexao.execute(text(f"TRUNCATE {tabelas} RESTART IDENTITY CASCADE"))
-    sessao.encerrar()
-    yield
-    sessao.encerrar()
-
-
-@pytest.fixture
-def usuarios():
-    return UsuarioService()
-
-
-@pytest.fixture
-def pesquisas():
-    return PesquisaService()
-
-
-@pytest.fixture
-def interacoes():
-    return InteracaoService()
-
-
-@pytest.fixture
-def entrar_como(usuarios):
-    """Cadastra (se preciso) e loga um usuário. Ex.: entrar_como('bia@x.com', nome='Bia')."""
-
-    def _entrar(email="ana@x.com", tipo="aluno", nome="Ana", senha="segredo1"):
-        if usuarios.repo.buscar_por_email(email) is None:
-            usuarios.cadastrar(nome, email, senha, tipo)
-        return usuarios.entrar(email, senha)
-
-    return _entrar
+def contar(sf, model):
+    with sf() as s:
+        return s.scalar(select(func.count()).select_from(model))
