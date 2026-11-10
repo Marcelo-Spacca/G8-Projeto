@@ -29,6 +29,18 @@ class PesquisaService:
         pesquisa = Pesquisa(titulo=titulo, objetivo=objetivo, aluno_id=aluno.id)
         return self.repo.salvar(pesquisa)
 
+    def editar(self, pesquisa_id, titulo, objetivo):  # RF08
+        pesquisa = self.obter(pesquisa_id)  # exige aluno logado e dono da pesquisa
+        if pesquisa.status == "concluida":
+            raise RegraViolada("Esta pesquisa já foi concluída e não pode ser editada.")
+        titulo = (titulo or "").strip()
+        objetivo = (objetivo or "").strip()
+        if not titulo:
+            raise RegraViolada("Informe o título da pesquisa.")
+        if not objetivo:
+            raise RegraViolada("Informe o objetivo da pesquisa.")
+        return self.repo.atualizar(pesquisa.id, titulo, objetivo)
+
     def listar_minhas(self):
         aluno = exigir_aluno()
         return self.repo.listar_por_aluno(aluno.id)
