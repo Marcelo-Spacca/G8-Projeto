@@ -220,3 +220,20 @@ def test_editar_pesquisa_pelo_menu():
 def test_fim_da_entrada_encerra_com_educacao():
     texto = rodar([])  # nenhuma resposta: simula Ctrl+D
     assert "Até logo!" in texto
+
+
+def test_editar_pesquisa_pelo_menu():
+    texto = rodar(
+        CADASTRAR_ANA + ENTRAR_ANA
+        + ["1", "Tema antigo", "Objetivo antigo"]                    # criar pesquisa
+        + ["3", "1"]                                                 # abrir a pesquisa nº 1
+        + ["4", "Tema novo", ""]                                     # editar: novo título, mantém objetivo
+        + ["4", "", ""]                                              # editar sem mudar nada
+        + ["0", "0", "0"]
+    )
+    assert "Pesquisa atualizada: Tema novo" in texto
+    assert "Pesquisa: Tema novo [Em andamento]" in texto
+    assert "Objetivo: Objetivo antigo" in texto
+    with Session() as s:
+        p = s.scalars(select(Pesquisa)).one()
+        assert (p.titulo, p.objetivo) == ("Tema novo", "Objetivo antigo")

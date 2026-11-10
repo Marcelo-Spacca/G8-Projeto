@@ -201,6 +201,8 @@ class MenuConsole:
                 "1. Registrar interação\n2. Listar interações\n"
                 "3. Abrir uma interação (ver, editar, excluir, fontes)\n"
                 "4. Editar título e objetivo\n5. Ver relatório desta pesquisa\n0. Voltar"
+                "1. Registrar interação\n2. Listar interações\n3. Ver uma interação (pergunta e resposta)\n"
+                "4. Editar título e objetivo\n0. Voltar"
             )
             opcao = self._ler("Escolha")
             if opcao == "0":
@@ -394,3 +396,6 @@ def _ordenar_trechos(fonte):
 def _trecho(trecho):
     onde = f" ({trecho.localizacao})" if trecho.localizacao else ""
     return f'Trecho{onde}: "{trecho.trecho_citado}"'
+            self.saida(f"\n{LINHA}")
+            self.saida(f"Ferramenta: {interacao.ferramenta_ia}   |   Registrada em: {_data(interacao.data_registro)}")
+            self.saida(f"{LINHA}\nPERGUNTA:\n{interacao.pergunta}\n\nRESPOSTA DA IA:\n{interacao.resposta}\n{LINHA}")
