@@ -1,4 +1,4 @@
-from repository.models import Pesquisa
+from repository.models import Pesquisa, Relatorio
 from repository.pesquisa_repository import PesquisaRepository
 from services.erros import RegraViolada
 from services.sessao import sessao
@@ -25,8 +25,11 @@ class PesquisaService:
             raise RegraViolada("Informe o título da pesquisa.")
         if not objetivo:
             raise RegraViolada("Informe o objetivo da pesquisa.")
-        # status 'em_andamento' e a data de criação vêm do próprio model/banco
-        pesquisa = Pesquisa(titulo=titulo, objetivo=objetivo, aluno_id=aluno.id)
+        # status 'em_andamento' e a data de criação vêm do próprio model/banco.
+        # RF20/RF22: o relatório nasce junto, ligado só a esta pesquisa (mesmo commit).
+        pesquisa = Pesquisa(
+            titulo=titulo, objetivo=objetivo, aluno_id=aluno.id, relatorio=Relatorio()
+        )
         return self.repo.salvar(pesquisa)
 
     def editar(self, pesquisa_id, titulo, objetivo):  # RF08
