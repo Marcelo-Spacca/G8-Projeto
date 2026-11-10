@@ -40,8 +40,9 @@ def test_fluxo_completo_do_aluno():
         + ["3", "1"]                                                 # abrir a pesquisa nº 1
         + ["1", "ChatGPT", "Qual o efeito da IA?", "FIM", "Efeito grande.", "Segunda linha.", "FIM"]
         + ["2"]                                                      # listar interações
-        + ["3", "1"]                                                 # ver a interação nº 1
-        + ["0"]                                                      # voltar
+        + ["3", "1"]                                                 # abrir a interação nº 1
+        + ["0"]                                                      # voltar da interação
+        + ["0"]                                                      # voltar da pesquisa
         + ["0"]                                                      # sair da conta
         + ["0"]                                                      # sair do programa
     )
@@ -181,7 +182,7 @@ def test_relatorio_pelo_aluno_e_pelo_professor():
         + ["3", "Silva (2023)"]
         + ["4", "1", "1", "", "FIM", "s", "Meu texto", "FIM", "§3"]
         + ["0"]                                                      # volta para a pesquisa
-        + ["4"]                                                      # relatório (aluno)
+        + ["5"]                                                      # relatório (aluno)
         + ["0", "0"]                                                 # volta e sai da conta
         + ["1", "Profa", "p@x.com", "123456", "2"]
         + ["2", "p@x.com", "123456"]
@@ -197,6 +198,23 @@ def test_relatorio_pelo_aluno_e_pelo_professor():
     assert "PERGUNTA:\nQual o efeito?" in relatorio_professor
     assert 'Trecho (§3): "Meu texto"' in relatorio_professor
     assert contar(Relatorio) == 1
+
+
+def test_editar_pesquisa_pelo_menu():
+    texto = rodar(
+        CADASTRAR_ANA + ENTRAR_ANA
+        + ["1", "Tema antigo", "Objetivo antigo"]                    # criar pesquisa
+        + ["3", "1"]                                                 # abrir a pesquisa nº 1
+        + ["4", "Tema novo", ""]                                     # editar: novo título, mantém objetivo
+        + ["4", "", ""]                                              # editar sem mudar nada
+        + ["0", "0", "0"]
+    )
+    assert "Pesquisa atualizada: Tema novo" in texto
+    assert "Pesquisa: Tema novo [Em andamento]" in texto
+    assert "Objetivo: Objetivo antigo" in texto
+    with Session() as s:
+        p = s.scalars(select(Pesquisa)).one()
+        assert (p.titulo, p.objetivo) == ("Tema novo", "Objetivo antigo")
 
 
 def test_fim_da_entrada_encerra_com_educacao():

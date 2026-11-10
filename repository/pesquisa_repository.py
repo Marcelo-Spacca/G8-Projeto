@@ -12,6 +12,16 @@ class PesquisaRepository:
             s.commit()
         return pesquisa
 
+    def atualizar(self, pesquisa_id, titulo, objetivo):
+        """Grava o novo título e objetivo e devolve a pesquisa atualizada."""
+        with Session() as s:
+            pesquisa = s.get(Pesquisa, pesquisa_id)
+            pesquisa.titulo = titulo
+            pesquisa.objetivo = objetivo
+            s.commit()
+            s.refresh(pesquisa)
+            return pesquisa
+
     def buscar_por_id(self, pesquisa_id):
         with Session() as s:
             return s.get(Pesquisa, pesquisa_id)
