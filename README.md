@@ -1,29 +1,44 @@
 # Projeto 1 (SI 26.2) — Registro verificável do uso de IA
 
-Aplicação desktop em Python para registrar interações com IA, verificar as fontes citadas e gerar um relatório para o professor.
+Aplicação desktop em Python (interface gráfica PySide6) para o aluno registrar suas interações com IA, verificar as fontes que a IA citou, ligar cada fonte verificada a um trecho do próprio texto e entregar um relatório ao professor.
 
 ---
 
-## 1. Estrutura do código e lógica de funcionamento
+## 1. O que o programa faz
+
+**Aluno**
+1. Cria uma **pesquisa** (título e objetivo) e pode editá-la ou excluí-la enquanto estiver em andamento.
+2. Registra as **interações** com a IA: ferramenta usada, pergunta e resposta.
+3. Cadastra as **fontes** que a IA citou (referência e link). Toda fonte nasce como *não verificada*.
+4. **Verifica** cada fonte: *verificada*, *incorreta/inventada* ou *não verificada*, com anotação. Uma fonte verificada pode ser ligada a um **trecho** do texto do aluno.
+5. **Conclui** a pesquisa: ela deixa de poder ser alterada e o **relatório** é gerado e entregue ao professor. Antes disso, o aluno vê uma prévia e pode salvar o relatório em PDF.
+
+**Professor**
+- Vê a lista de relatórios das pesquisas **concluídas** (com a contagem de fontes verificadas, incorretas e pendentes) e abre o detalhe de cada uma.
+
+**Acesso:** aluno e professor têm telas separadas. Um perfil não abre as telas do outro, nem por endereço/número direto, e um aluno nunca enxerga a pesquisa de outro aluno.
+
+## 2. Estrutura do código
 
 ### Tecnologias
 
 | Parte | Tecnologia |
 |---|---|
-| Linguagem | Python |
+| Linguagem | Python 3.11+ |
+| Interface | PySide6 (Qt) |
 | Banco de dados | PostgreSQL |
-| Acesso ao banco | SQLAlchemy + psycopg |
-| Senhas | hash com `hashlib.scrypt` (biblioteca padrão) |
+| Acesso ao banco | SQLAlchemy 2.x + psycopg |
+| Senhas | `hashlib.scrypt` (biblioteca padrão) |
 | Configuração | arquivo `.env` (python-dotenv) |
 | Testes | pytest |
-| Interface | menu de console (por enquanto); PySide6 planejado |
+| Empacotamento | PyInstaller |
 
 ### Arquitetura em camadas
 
 O código é um monolito dividido em camadas. **Cada camada só chama a que está abaixo dela**, nunca a de cima.
 
 ```
-ui/           interface com o usuário (menu de console)
+ui/           telas (PySide6)
    ↓
 services/     regras de negócio
    ↓
@@ -32,34 +47,40 @@ repository/   modelos e acesso ao banco (SQLAlchemy)
 PostgreSQL
 ```
 
-- **ui:** mostra o menu, lê o que o usuário digita e chama os services. Não tem regra de negócio nem acesso ao banco.
-- **services:** aplicam as regras do projeto (validações, permissões, hash de senha). Não conhecem a interface.
+- **ui:** mostra as telas, lê o que o usuário digita e chama os services. Não tem regra de negócio nem acesso ao banco.
+- **services:** aplicam as regras (validações, permissões, hash de senha, quem pode ver o quê). Não conhecem a interface.
 - **repository:** lê e grava no banco. Não conhece regra de negócio.
 
 ### Estrutura de pastas
 
 ```
 .
-├── main.py            # abre o programa
-├── ui/                # menu_console.py
-├── services/          # regras de negócio
+├── main.py                  # abre o programa
+├── ui/
+│   ├── app.py               # cria a aplicação e a janela
+│   ├── janela_principal.py  # barra superior, troca de telas e guarda por perfil
+│   ├── tela_acesso.py       # entrar / criar conta
+│   ├── tela_pesquisas.py    # lista de pesquisas do aluno
+│   ├── tela_pesquisa.py     # detalhe da pesquisa e suas interações
+│   ├── tela_interacao.py    # interação, fontes, verificação e trechos
+│   ├── tela_relatorio.py    # relatório (prévia, entregue e PDF)
+│   ├── tela_professor.py    # relatórios entregues (professor)
+│   ├── dialogos.py          # formulários e janela de verificação
+│   ├── componentes.py       # peças reutilizáveis (botões, selos, listas)
+│   ├── estilo.py            # cores, fontes e folha de estilo (QSS)
+│   └── relatorio_html.py    # monta o HTML do relatório
+├── services/                # usuario, pesquisa, interacao, fonte, relatorio
+│   ├── erros.py             # RegraViolada
+│   ├── sessao.py            # quem está logado
+│   └── seguranca.py         # hash de senha
 ├── repository/
-│   ├── models/        # uma classe SQLAlchemy por tabela
-│   └── *_repository.py  # consultas de cada entidade
-├── scripts/           # utilitários (criar_tabelas.py)
-├── tests/             # testes automatizados
+│   ├── models/              # uma classe SQLAlchemy por tabela
+│   └── *_repository.py      # consultas de cada entidade
+├── scripts/criar_tabelas.py # cria e atualiza as tabelas
+├── tests/                   # testes automatizados (serviços e telas)
 ├── pytest.ini
 └── requirements.txt
 ```
-
-### Como uma ação percorre as camadas
-
-Exemplo, o cadastro de um usuário:
-
-1. O **menu** lê nome, e-mail, senha e tipo, e chama `UsuarioService.cadastrar(...)`.
-2. O **service** valida os campos, confere se o e-mail já existe, gera o hash da senha e monta o objeto `Usuario`.
-3. O **repository** (`UsuarioRepository`) grava no PostgreSQL e devolve o usuário salvo.
-4. Se alguma regra for violada, o service levanta `RegraViolada` e o menu mostra a mensagem, sem encerrar o programa.
 
 ### Modelo de dados
 
@@ -67,21 +88,17 @@ Exemplo, o cadastro de um usuário:
 |---|---|
 | Usuário (aluno / professor) | — |
 | Turma | pertence a um professor |
-| Pesquisa | pertence a um aluno; gera 1 relatório |
+| Pesquisa | pertence a um aluno; tem 1 relatório |
 | Interação | pertence a uma pesquisa |
-| Fonte | pertence a uma interação |
+| Fonte (referência, link, status) | pertence a uma interação |
 | Trecho | pertence a uma fonte |
 | Relatório | 1:1 com a pesquisa |
 
 Apagar uma pesquisa apaga em cascata suas interações, fontes, trechos e relatório.
 
-### Funcionalidades implementadas
-
-Cadastro e login (com senha em hash), criação e listagem de pesquisas do aluno, registro e listagem de interações de uma pesquisa.
-
 ---
 
-## 2. Como rodar o código e os testes
+## 3. Como rodar o código e os testes
 
 **Requisitos:** Python 3.11+ e PostgreSQL instalado e rodando.
 
@@ -105,7 +122,7 @@ No Linux/macOS, ative com `source .venv/bin/activate`.
 ### Configurar o banco
 
 1. No PostgreSQL (pgAdmin ou `psql`), crie o banco: `CREATE DATABASE projeto1;`
-2. Crie um arquivo `.env` na raiz do projeto com os dados do **seu** PostgreSQL:
+2. Copie `.env.example` para `.env` na raiz e preencha com os dados do **seu** PostgreSQL:
 
 ```
 DB_HOST=localhost
@@ -115,8 +132,6 @@ DB_USER=seu_usuario
 DB_PASSWORD=sua_senha
 ```
 
-> O `.env` contém credenciais e **nunca deve ser enviado ao GitHub** (já está no `.gitignore`).
-
 ### Criar as tabelas e abrir o programa
 
 ```bash
@@ -124,11 +139,9 @@ python -m scripts.criar_tabelas
 python main.py
 ```
 
-O SQLAlchemy só cria tabelas que ainda não existem. Se um modelo mudar, apague as tabelas e rode `criar_tabelas` de novo.
+`criar_tabelas` cria as tabelas que faltam e aplica as colunas novas (por exemplo `fonte.link`), então **rode-o de novo sempre que atualizar o código**. Não há Alembic: se um modelo mudar de forma que o script não cubra, apague as tabelas e rode-o outra vez.
 
-### Menu de console
-
-`python main.py` abre um menu de texto: cadastrar, entrar, criar pesquisa, listar pesquisas, registrar e ver interações. Textos de várias linhas (pergunta e resposta da IA) terminam com uma linha contendo só `FIM`.
+Na primeira vez, clique em **Criar conta** e cadastre um aluno e um professor para ver as duas áreas.
 
 ### Testes
 
@@ -136,24 +149,22 @@ O SQLAlchemy só cria tabelas que ainda não existem. Se um modelo mudar, apague
 pytest -v
 ```
 
-- Os testes usam o PostgreSQL de verdade, mas em um **banco separado**, `projeto1_teste`, criado automaticamente (o usuário do `.env` precisa ter permissão para criar bancos).
+- Cobrem as regras (services e banco) e as telas (a janela é aberta de verdade, sem aparecer no monitor, e os testes clicam e digitam nela).
+- Usam o PostgreSQL de verdade, mas em um **banco separado**, `projeto1_teste`, criado automaticamente (o usuário do `.env` precisa ter permissão para criar bancos).
 - O banco `projeto1` nunca é tocado pelos testes.
 - Para mudar o nome do banco de teste, defina `DB_NAME_TESTE` no `.env`. O nome **precisa terminar com `_teste`**, senão os testes abortam por segurança.
 
-Comandos úteis:
+### Gerar o executável (opcional)
 
 ```bash
-pytest tests/test_banco.py -v          # um arquivo
-pytest -k "login" -v                   # testes cujo nome contém "login"
-pytest -x                              # para no primeiro erro
-pytest --collect-only -q               # lista os testes sem rodar
+pyinstaller --noconsole --name RegistroIA main.py
 ```
 
-Se o comando `pytest` não for reconhecido, use `python -m pytest -v`.
+O programa continua lendo o `.env` (coloque-o ao lado do executável).
 
 ---
 
-## 3. Trabalhando com Git: pull, branch e push
+## 4. Trabalhando com Git: pull, branch e push
 
 Nunca trabalhe direto na `main`. Cada alteração vai em uma branch própria.
 
@@ -170,7 +181,7 @@ git pull origin main
 git checkout -b nome-da-branch
 ```
 
-Use um nome curto que diga o que será feito, por exemplo `feature/cadastro-usuario` ou `fix/ordem-listagem`.
+Use um nome curto que diga o que será feito, por exemplo `feature/filtros-professor` ou `fix/ordem-listagem`.
 
 ### 3. Fazer as alterações, salvar e enviar
 
@@ -185,11 +196,4 @@ O `-u` só é necessário no primeiro push da branch; nos seguintes, basta `git 
 
 ### 4. Abrir o Pull Request
 
-No GitHub, aparecerá o botão **Compare & pull request** para a branch enviada. Abra o PR para a `main`, descreva a mudança e peça revisão de outro integrante antes de fazer o merge.
-
-### Boas práticas
-
-- Rode `pytest` antes de dar push.
-- Antes de começar algo novo, atualize a `main` (passo 1) e crie a branch a partir dela.
-- Nunca faça commit do `.env`, do `.venv/` nem de senhas.
-- Se a `main` avançou enquanto você trabalhava, traga as mudanças para a sua branch: `git checkout main`, `git pull origin main`, `git checkout nome-da-branch`, `git merge main`.
+No GitHub, aparecerá o botão **Compare & pull request** para a branch enviada. Abra o PR para a `main`, descreva a mudança e peça revisão de outro integrante antes de fazer o merge. Antes de abrir o PR, rode `pytest -v`.
