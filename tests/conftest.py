@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 # 1) Troca o nome do banco ANTES de qualquer import do repository.
 load_dotenv()
 os.environ["DB_NAME"] = os.getenv("DB_NAME_TESTE", "projeto1_teste")
+# Os testes de tela rodam sem abrir janelas de verdade.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from sqlalchemy import create_engine, text  # noqa: E402
 

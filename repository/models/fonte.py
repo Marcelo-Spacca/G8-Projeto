@@ -21,6 +21,7 @@ class Fonte(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     referencia: Mapped[str] = mapped_column(Text)
+    link: Mapped[str | None] = mapped_column(Text)  # RF15: endereço da fonte, opcional
     status: Mapped[str] = mapped_column(default="nao_verificada")
     anotacao_correcao: Mapped[str | None] = mapped_column(Text)
     data_verificacao: Mapped[datetime | None]

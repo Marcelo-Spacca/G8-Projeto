@@ -44,6 +44,24 @@ class PesquisaService:
             raise RegraViolada("Informe o objetivo da pesquisa.")
         return self.repo.atualizar(pesquisa.id, titulo, objetivo)
 
+    def concluir(self, pesquisa_id):  # RF10
+        """Conclui a pesquisa: ela passa a 'concluida' (não muda mais) e o relatório é gerado
+        e fica disponível para o professor. Fontes ainda não verificadas não impedem a
+        conclusão; a tela avisa o aluno antes."""
+        pesquisa = self.obter(pesquisa_id)  # exige aluno logado e dono da pesquisa
+        if pesquisa.status == "concluida":
+            raise RegraViolada("Esta pesquisa já foi concluída.")
+        return self.repo.concluir(pesquisa.id)
+
+    def excluir(self, pesquisa_id):  # RF09
+        """Apaga uma pesquisa não concluída, com interações, fontes, trechos e o relatório dela.
+        Pesquisa concluída já foi entregue ao professor e não pode ser apagada. A confirmação
+        com o usuário é feita pela tela antes de chamar este método."""
+        pesquisa = self.obter(pesquisa_id)  # exige aluno logado e dono da pesquisa
+        if pesquisa.status == "concluida":
+            raise RegraViolada("Esta pesquisa já foi concluída e entregue ao professor: não pode ser excluída.")
+        self.repo.excluir(pesquisa.id)
+
     def listar_minhas(self):
         aluno = exigir_aluno()
         return self.repo.listar_por_aluno(aluno.id)

@@ -18,6 +18,7 @@ class InteracaoRepository:
             consulta = (
                 select(Interacao)
                 .where(Interacao.pesquisa_id == pesquisa_id)
+                .options(selectinload(Interacao.fontes))  # a tela mostra "2 fontes, 1 pendente"
                 .order_by(Interacao.data_registro, Interacao.id)
             )
             return list(s.scalars(consulta))

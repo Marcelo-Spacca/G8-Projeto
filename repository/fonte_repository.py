@@ -22,14 +22,19 @@ class FonteRepository:
             return s.scalars(consulta).first()
 
     def registrar_verificacao(self, fonte_id, status, anotacao, trecho):
-        """Grava o resultado da verificação (RF18) e, se houver, o trecho ligado (RF26)
-        numa única transação: ou salva tudo, ou nada."""
+        """Grava o resultado da verificação (RF17), a anotação (RF18) e, se houver, o trecho
+        ligado (RF26) numa única transação: ou salva tudo, ou nada.
+
+        Trecho só faz sentido em fonte verificada: se a fonte deixa de ser 'verificada',
+        os trechos ligados a ela saem junto (o cascade do model apaga)."""
         with Session() as s:
             fonte = s.get(Fonte, fonte_id)
             fonte.status = status
-            fonte.data_verificacao = func.now()
+            fonte.data_verificacao = None if status == "nao_verificada" else func.now()
             if anotacao is not None:
                 fonte.anotacao_correcao = anotacao
+            if status != "verificada":
+                fonte.trechos.clear()
             if trecho is not None:
                 fonte.trechos.append(trecho)
             s.commit()

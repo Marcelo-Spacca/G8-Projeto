@@ -1,9 +1,6 @@
-from ui.menu_console import MenuConsole
+import sys
 
-
-def main():
-    MenuConsole().executar()
-
+from ui.app import executar
 
 if __name__ == "__main__":
-    main()
+    sys.exit(executar())

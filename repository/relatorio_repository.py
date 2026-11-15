@@ -1,4 +1,4 @@
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from repository.database import Session
@@ -10,8 +10,9 @@ class RelatorioRepository:
         with Session() as s:
             return s.scalars(select(Relatorio).where(Relatorio.pesquisa_id == pesquisa_id)).first()
 
-    def registrar_geracao(self, pesquisa_id):
-        """RF22: usa o relatório da pesquisa (cria se ainda não existir) e marca a hora de geração."""
+    def garantir(self, pesquisa_id):
+        """RF22: devolve o relatório da pesquisa (cria se ainda não existir, só para pesquisas
+        antigas). A data de geração só muda quando a pesquisa é concluída (RF10)."""
         with Session() as s:
             relatorio = s.scalars(
                 select(Relatorio).where(Relatorio.pesquisa_id == pesquisa_id)
@@ -19,9 +20,8 @@ class RelatorioRepository:
             if relatorio is None:
                 relatorio = Relatorio(pesquisa_id=pesquisa_id)
                 s.add(relatorio)
-            relatorio.data_geracao = func.now()
-            s.commit()
-            s.refresh(relatorio)
+                s.commit()
+                s.refresh(relatorio)
             return relatorio
 
     def dados_da_pesquisa(self, pesquisa_id):

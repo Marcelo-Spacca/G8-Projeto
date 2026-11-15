@@ -13,7 +13,7 @@ def contar_relatorios():
 
 @pytest.fixture
 def pesquisa_completa(interacoes, pesquisas, fontes, usuarios, entrar_como):
-    """Ana cria uma pesquisa com 1 interação e 3 fontes (uma de cada status) e sai."""
+    """Ana cria uma pesquisa com 1 interação e 3 fontes (uma de cada status), conclui e sai."""
     entrar_como()
     p = pesquisas.criar("Impacto da IA", "Entender o uso de IA")
     i = interacoes.registrar(p.id, "ChatGPT", "Qual o efeito?", "Grande.")
@@ -22,6 +22,7 @@ def pesquisa_completa(interacoes, pesquisas, fontes, usuarios, entrar_como):
     fontes.adicionar(i.id, "Souza (2020)")
     fontes.verificar(f1.id, "verificada", anotacao="Confere", trecho="Meu texto", localizacao="§3")
     fontes.verificar(f2.id, "incorreta", anotacao="Não existe")
+    p = pesquisas.concluir(p.id)
     usuarios.sair()
     return p
 
@@ -91,13 +92,66 @@ def test_relatorio_exige_login_e_pesquisa_existente(relatorios, entrar_como):
         relatorios.gerar(99999)
 
 
-def test_so_professor_lista_todas_as_pesquisas(relatorios, entrar_como, pesquisa_completa):
+def test_so_professor_lista_as_pesquisas_entregues(relatorios, entrar_como, pesquisa_completa):
     entrar_como()
     with pytest.raises(RegraViolada, match="professores"):
-        relatorios.listar_pesquisas()
+        relatorios.listar_entregues()
     from services.sessao import sessao
 
     sessao.encerrar()
     entrar_como("p@x.com", tipo="professor", nome="Prof")
-    [p] = relatorios.listar_pesquisas()
+    [p] = relatorios.listar_entregues()
     assert p.titulo == "Impacto da IA" and p.aluno.nome == "Ana"
+    assert relatorios.contagem_fontes(p) == {"verificada": 1, "incorreta": 1, "nao_verificada": 1}
+
+
+# ---------------------------------------------------------------- RF23 / RF03: o professor só vê o que foi entregue
+def test_professor_nao_ve_pesquisa_em_andamento(relatorios, pesquisas, usuarios, entrar_como):
+    entrar_como()
+    rascunho = pesquisas.criar("Ainda escrevendo", "O")
+    usuarios.sair()
+    entrar_como("p@x.com", tipo="professor", nome="Prof")
+    assert relatorios.listar_entregues() == []
+    with pytest.raises(RegraViolada, match="não encontrada"):
+        relatorios.gerar(rascunho.id)  # nem pelo número direto
+
+
+def test_lista_do_professor_mostra_a_entrega_mais_recente_primeiro(relatorios, pesquisas, usuarios, entrar_como):
+    entrar_como()
+    a = pesquisas.criar("A", "O")
+    b = pesquisas.criar("B", "O")
+    pesquisas.concluir(b.id)
+    pesquisas.concluir(a.id)  # A foi entregue por último
+    usuarios.sair()
+    entrar_como("p@x.com", tipo="professor", nome="Prof")
+    assert [p.titulo for p in relatorios.listar_entregues()] == ["A", "B"]
+
+
+# ---------------------------------------------------------------- RF21: o aluno confere o que será entregue
+def test_aluno_ve_a_previa_antes_de_concluir_e_o_relatorio_depois(relatorios, pesquisas, entrar_como):
+    entrar_como()
+    p = pesquisas.criar("T", "O")
+    assert relatorios.gerar(p.id).entregue is False
+    pesquisas.concluir(p.id)
+    assert relatorios.gerar(p.id).entregue is True
+
+
+def test_data_do_relatorio_nao_muda_ao_abrir_de_novo(relatorios, pesquisas, entrar_como):
+    entrar_como()
+    p = pesquisas.criar("T", "O")
+    pesquisas.concluir(p.id)
+    primeira = relatorios.gerar(p.id).relatorio.data_geracao
+    segunda = relatorios.gerar(p.id).relatorio.data_geracao
+    assert primeira == segunda
+
+
+# ---------------------------------------------------------------- RF28: o trecho aparece junto da fonte
+def test_relatorio_do_professor_traz_o_trecho_de_cada_fonte(relatorios, entrar_como, pesquisa_completa):
+    entrar_como("p@x.com", tipo="professor", nome="Prof")
+    r = relatorios.gerar(pesquisa_completa.id)
+    com_trecho = [f for f in r.fontes if f.trechos]
+    assert [f.referencia for f in com_trecho] == ["Silva (2023)"]
+    t = com_trecho[0].trechos[0]
+    assert (t.trecho_citado, t.localizacao) == ("Meu texto", "§3")
+    sem_trecho = [f.referencia for f in r.fontes if not f.trechos]
+    assert sorted(sem_trecho) == ["Inventada (2099)", "Souza (2020)"]

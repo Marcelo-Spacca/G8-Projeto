@@ -186,3 +186,16 @@ def test_apagar_usuario_apaga_suas_pesquisas():
     with engine.begin() as c:
         c.execute(text("DELETE FROM usuario WHERE id = :i"), {"i": aluno.id})
     assert contar(Pesquisa) == 0 and _contagens() == [0, 0, 0, 0]
+
+
+
+# ---------------------------------------------------------------- RF15: coluna nova em banco antigo
+def test_criar_tabelas_acrescenta_a_coluna_link_em_banco_antigo():
+    from scripts.criar_tabelas import criar_tabelas
+
+    with engine.begin() as c:
+        c.execute(text("ALTER TABLE fonte DROP COLUMN link"))  # como era antes do RF15
+    assert "link" not in {col["name"] for col in inspect(engine).get_columns("fonte")}
+    criar_tabelas()
+    criar_tabelas()  # pode rodar mais de uma vez
+    assert "link" in {col["name"] for col in inspect(engine).get_columns("fonte")}

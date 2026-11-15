@@ -128,3 +128,93 @@ def test_editar_pesquisa_exige_aluno_logado(pesquisas, entrar_como):
     entrar_como("p@x.com", tipo="professor", nome="Prof")
     with pytest.raises(RegraViolada, match="alunos"):
         pesquisas.editar(1, "T", "O")
+
+
+# ---------------------------------------------------------------- RF09
+def test_excluir_pesquisa_em_andamento_leva_tudo_junto(pesquisas, interacoes, fontes, entrar_como):
+    from sqlalchemy import func, select
+
+    from repository.database import Session
+    from repository.models import Fonte, Interacao, Relatorio, Trecho
+
+    entrar_como()
+    p = pesquisas.criar("Tema", "Obj")
+    outra = pesquisas.criar("Fica", "Obj")
+    i = interacoes.registrar(p.id, "ChatGPT", "P", "R")
+    f = fontes.adicionar(i.id, "Silva (2023)")
+    fontes.verificar(f.id, "verificada", trecho="Meu trecho")
+    pesquisas.excluir(p.id)
+    assert [x.titulo for x in pesquisas.listar_minhas()] == ["Fica"]
+    with pytest.raises(RegraViolada, match="não encontrada"):
+        pesquisas.obter(p.id)
+    with Session() as s:
+        for modelo in (Interacao, Fonte, Trecho):
+            assert s.scalar(select(func.count()).select_from(modelo)) == 0
+        assert s.scalar(select(func.count()).select_from(Relatorio)) == 1  # só o da pesquisa que ficou
+    assert pesquisas.obter(outra.id).titulo == "Fica"
+
+
+def test_pesquisa_concluida_nao_pode_ser_excluida(pesquisas, entrar_como):
+    entrar_como()
+    p = pesquisas.criar("Tema", "Obj")
+    pesquisas.concluir(p.id)
+    with pytest.raises(RegraViolada, match="não pode ser excluída"):
+        pesquisas.excluir(p.id)
+    assert pesquisas.obter(p.id).status == "concluida"
+
+
+def test_excluir_pesquisa_exige_ser_o_aluno_dono(pesquisas, usuarios, entrar_como):
+    entrar_como("a@x.com")
+    p = pesquisas.criar("Da Ana", "O")
+    usuarios.sair()
+    with pytest.raises(RegraViolada, match="Entre"):
+        pesquisas.excluir(p.id)
+    entrar_como("b@x.com", nome="Bia")
+    with pytest.raises(RegraViolada, match="não encontrada"):
+        pesquisas.excluir(p.id)
+    usuarios.sair()
+    entrar_como("p@x.com", tipo="professor", nome="Prof")
+    with pytest.raises(RegraViolada, match="alunos"):
+        pesquisas.excluir(p.id)
+    usuarios.sair()
+    entrar_como("a@x.com")
+    assert pesquisas.obter(p.id).titulo == "Da Ana"
+
+
+# ---------------------------------------------------------------- RF10
+def test_concluir_pesquisa_muda_status_e_gera_o_relatorio(pesquisas, relatorios, entrar_como):
+    entrar_como()
+    p = pesquisas.criar("Tema", "Obj")
+    antes = relatorios.gerar(p.id).relatorio.data_geracao
+    concluida = pesquisas.concluir(p.id)
+    assert concluida.status == "concluida" and concluida.data_conclusao is not None
+    # a conclusão fica gravada no banco e o relatório foi gerado agora, junto dela
+    assert pesquisas.obter(p.id).status == "concluida"
+    r = relatorios.gerar(p.id)
+    assert r.entregue and r.relatorio.data_geracao >= antes
+
+
+def test_pesquisa_concluida_nao_pode_ser_concluida_de_novo_nem_editada(pesquisas, entrar_como):
+    entrar_como()
+    p = pesquisas.criar("Tema", "Obj")
+    pesquisas.concluir(p.id)
+    with pytest.raises(RegraViolada, match="já foi concluída"):
+        pesquisas.concluir(p.id)
+    with pytest.raises(RegraViolada, match="concluída"):
+        pesquisas.editar(p.id, "Outro", "Outro")
+
+
+def test_concluir_exige_ser_o_aluno_dono(pesquisas, usuarios, entrar_como):
+    entrar_como("a@x.com")
+    p = pesquisas.criar("Da Ana", "O")
+    usuarios.sair()
+    with pytest.raises(RegraViolada, match="Entre"):
+        pesquisas.concluir(p.id)
+    entrar_como("b@x.com", nome="Bia")
+    with pytest.raises(RegraViolada, match="não encontrada"):
+        pesquisas.concluir(p.id)
+    usuarios.sair()
+    entrar_como("p@x.com", tipo="professor", nome="Prof")
+    with pytest.raises(RegraViolada, match="alunos"):
+        pesquisas.concluir(p.id)
+    assert pesquisas.repo.buscar_por_id(p.id).status == "em_andamento"
