@@ -2,8 +2,10 @@
 
 Aqui não há regra de negócio nem acesso ao banco: só widgets.
 """
-from PySide6.QtCore import QRect, Qt, Signal
+from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
+    QCheckBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -21,6 +23,7 @@ from services.erros import RegraViolada
 # Texto e cor do selo de cada status. A chave é o valor guardado no banco.
 STATUS_PESQUISA = {
     "em_andamento": ("Em andamento", "andamento"),
+    "entregue": ("Entregue ao professor", "pendente"),
     "concluida": ("Concluída", "verificada"),
 }
 STATUS_FONTE = {
@@ -43,7 +46,8 @@ def mensagem_de_erro(erro):
     primeira_linha = (str(erro).strip().splitlines() or [""])[0][:160]
     return (
         f"Erro inesperado ({type(erro).__name__}: {primeira_linha}). "
-        "Se for de conexão, confira se o PostgreSQL está rodando e o arquivo .env."
+        "Se for de conexão, confira a internet, o arquivo .env e se o banco Firestore foi criado "
+        "no Firebase (README, seção Firebase)."
     )
 
 
@@ -78,6 +82,16 @@ def selo_status_pesquisa(status):
     return selo(texto, tipo)
 
 
+def selo_da_pesquisa(pesquisa, visao="aluno"):
+    """Selo do estado da pesquisa. A devolvida (voltou ao aluno com uma mensagem) tem selo próprio.
+    Para o professor, 'entregue' significa que a revisão está esperando por ele."""
+    if pesquisa.devolvida:
+        return selo("Devolvida para ajustes", "incorreta")
+    if pesquisa.status == "entregue" and visao == "professor":
+        return selo("Aguardando sua revisão", "pendente")
+    return selo_status_pesquisa(pesquisa.status)
+
+
 def botao(texto, tipo="secundario", ao_clicar=None):
     """tipo: primario, secundario, perigo ou link."""
     b = QPushButton(texto)
@@ -86,6 +100,111 @@ def botao(texto, tipo="secundario", ao_clicar=None):
     if ao_clicar is not None:
         b.clicked.connect(lambda _marcado=False: ao_clicar())
     return b
+
+
+def botao_tutorial(ao_clicar):
+    """Botão pequeno de ajuda que fica perto das ações de cada tela."""
+    b = botao("? Tutorial", "ajuda", ao_clicar)
+    b.setToolTip("Como usar esta tela")
+    return b
+
+
+def aba(texto, ativa, ao_clicar):
+    """Aba de duas ou três opções lado a lado (Individuais | Grupos). A ativa fica sublinhada."""
+    b = botao(texto, "aba", ao_clicar)
+    b.setProperty("ativa", "sim" if ativa else "nao")
+    return b
+
+
+def nomes(alunos):
+    """'Ana, Bia e Caio' a partir de uma lista de alunos."""
+    nomes_ = [a.nome for a in alunos]
+    if len(nomes_) <= 1:
+        return "".join(nomes_)
+    return ", ".join(nomes_[:-1]) + " e " + nomes_[-1]
+
+
+def autor_da_pesquisa(pesquisa):
+    """Quem assina a pesquisa: o aluno, ou 'Grupo Time A (Ana e Bia)'."""
+    if pesquisa.de_grupo:
+        return f"Grupo {pesquisa.grupo.nome} ({nomes(pesquisa.grupo.alunos)})"
+    return pesquisa.aluno.nome
+
+
+class CaixaDeEntrega(QCheckBox):
+    """Caixa de marcação só para mostrar (o professor não a altera): marcada quando o aluno
+    já entregou a pesquisa para verificação."""
+
+    def __init__(self, texto, marcada):
+        super().__init__(texto)
+        self.setChecked(marcada)
+        self.setFocusPolicy(Qt.NoFocus)
+        self.setCursor(Qt.ArrowCursor)
+        self.setAccessibleName(texto)
+
+    def nextCheckState(self):  # só mostra: clicar não muda
+        pass
+
+    def mousePressEvent(self, evento):
+        evento.ignore()  # o clique vai para a linha, que abre a pesquisa
+
+    def mouseReleaseEvent(self, evento):
+        evento.ignore()
+
+    def sizeHint(self):
+        largura = self.fontMetrics().horizontalAdvance(self.text())
+        return QSize(26 + largura + 4, 24)
+
+    def paintEvent(self, evento):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        marcada = self.isChecked()
+        verde = QColor("#1B7547")
+        caixa = QRectF(1.5, (self.height() - 18) / 2, 18, 18)
+        p.setPen(QPen(verde if marcada else QColor("#9AA4B2"), 1.5))
+        p.setBrush(verde if marcada else QColor("#FFFFFF"))
+        p.drawRoundedRect(caixa, 4, 4)
+        if marcada:
+            risco = QPainterPath()
+            x, y = caixa.left(), caixa.top()
+            risco.moveTo(QPointF(x + 4.2, y + 9.4))
+            risco.lineTo(QPointF(x + 7.7, y + 12.9))
+            risco.lineTo(QPointF(x + 13.8, y + 5.6))
+            p.setBrush(Qt.NoBrush)
+            p.setPen(QPen(QColor("#FFFFFF"), 2.2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+            p.drawPath(risco)
+        p.setPen(QColor("#1C2430") if marcada else QColor("#5B6778"))
+        p.drawText(QRect(26, 0, self.width() - 26, self.height()), Qt.AlignVCenter | Qt.AlignLeft, self.text())
+
+
+def painel_texto(titulo, texto):
+    """Moldura com um título pequeno e um texto de documento (pergunta, resposta...)."""
+    painel = QFrame()
+    painel.setProperty("papel", "painel")
+    v = QVBoxLayout(painel)
+    v.setContentsMargins(20, 14, 20, 16)
+    v.setSpacing(6)
+    v.addWidget(rotulo(titulo, "campo"))
+    corpo = rotulo(texto, "documento", selecionavel=True)
+    painel.texto = corpo
+    v.addWidget(corpo)
+    return painel
+
+
+def recado(titulo, texto, tipo="info"):
+    """Caixa de destaque para uma mensagem do professor ou um aviso de estado da pesquisa.
+    tipo: devolucao (vermelho), comentario (azul), aviso (âmbar) ou info (neutro)."""
+    caixa = QFrame()
+    caixa.setProperty("papel", "recado")
+    caixa.setProperty("tipo", tipo)
+    v = QVBoxLayout(caixa)
+    v.setContentsMargins(18, 14, 18, 14)
+    v.setSpacing(5)
+    caixa.titulo = rotulo(titulo, "recado_titulo", selecionavel=True)
+    caixa.texto = rotulo(texto, "recado_texto", selecionavel=True)
+    v.addWidget(caixa.titulo)
+    v.addWidget(caixa.texto)
+    return caixa
 
 
 def cortar(texto, limite):

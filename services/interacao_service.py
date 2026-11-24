@@ -1,12 +1,23 @@
 from repository.interacao_repository import InteracaoRepository
 from repository.models import Interacao
 from services.erros import RegraViolada
-from services.pesquisa_service import PesquisaService
+from services.pesquisa_service import PesquisaService, motivo_de_bloqueio
 
 
 def exigir_pesquisa_aberta(pesquisa):
-    if pesquisa.status == "concluida":
-        raise RegraViolada("Esta pesquisa já foi concluída e não pode mais ser alterada.")
+    """O aluno só altera enquanto a pesquisa está com ele (em andamento, inclusive devolvida)."""
+    motivo = motivo_de_bloqueio(pesquisa)
+    if motivo:
+        raise RegraViolada(motivo)
+
+
+def exigir_interacao_aberta(interacao):
+    """Interação confirmada pelo professor está fechada: o aluno cria outra se precisar ajustar."""
+    if interacao.confirmada:
+        raise RegraViolada(
+            "Esta interação foi confirmada pelo professor e não pode mais ser alterada. "
+            "Se precisar ajustar algo, crie uma nova interação."
+        )
 
 
 def _validar_textos(ferramenta_ia, pergunta, resposta):
@@ -29,8 +40,8 @@ class InteracaoService:
 
     def registrar(self, pesquisa_id, ferramenta_ia, pergunta, resposta):
         pesquisa = self.pesquisas.obter(pesquisa_id)
-        if pesquisa.status == "concluida":
-            raise RegraViolada("Esta pesquisa já foi concluída e não aceita novas interações.")
+        if motivo_de_bloqueio(pesquisa):
+            raise RegraViolada(motivo_de_bloqueio(pesquisa))
 
         ferramenta_ia, pergunta, resposta = _validar_textos(ferramenta_ia, pergunta, resposta)
         interacao = Interacao(
@@ -63,6 +74,7 @@ class InteracaoService:
         """Corrige ferramenta, pergunta e resposta. As fontes ligadas não mudam."""
         interacao = self.obter(interacao_id)
         exigir_pesquisa_aberta(self.pesquisas.obter(interacao.pesquisa_id))
+        exigir_interacao_aberta(interacao)
         ferramenta_ia, pergunta, resposta = _validar_textos(ferramenta_ia, pergunta, resposta)
         self.repo.atualizar(interacao.id, ferramenta_ia, pergunta, resposta)
         return self.obter(interacao.id)
@@ -72,4 +84,5 @@ class InteracaoService:
         A confirmação com o usuário é feita pela tela antes de chamar este método."""
         interacao = self.obter(interacao_id)
         exigir_pesquisa_aberta(self.pesquisas.obter(interacao.pesquisa_id))
+        exigir_interacao_aberta(interacao)
         self.repo.excluir(interacao.id)

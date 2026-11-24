@@ -14,8 +14,9 @@ from PySide6.QtCore import Qt, qInstallMessageHandler  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton  # noqa: E402
 
+from repository import armazenamento  # noqa: E402
 from ui import componentes, estilo  # noqa: E402
-from ui.dialogos import DialogoVerificacao  # noqa: E402
+from ui.dialogos import DialogoTutorial, DialogoVerificacao  # noqa: E402
 from ui.janela_principal import JanelaPrincipal  # noqa: E402
 from ui.tela_relatorio import exportar_pdf  # noqa: E402
 
@@ -120,15 +121,63 @@ class Cena:
     def sair(self):
         self.clicar(self.janela.botao_sair)
 
-    def entrar_como_aluno(self, nome="Ana", email="ana@x.com", senha="segredo1"):
+    def garantir_turma_padrao(self, permite_grupos=False):
+        """A turma 'Projeto 1' (código TURMA1), criada direto no banco. Fica com a professora
+        prof@x.com, se ela já existir, ou com uma dona escondida até a professora aparecer."""
+        from tests.apoio import turma_do_dono_escondido
+
+        achadas = armazenamento.loja().consultar("turmas", codigo="TURMA1")
+        if achadas:
+            return achadas[0]["id"]
+        return turma_do_dono_escondido("Projeto 1", "TURMA1", permite_grupos)
+
+    def entrar_na_turma(self, codigo="TURMA1"):
+        """Pelo botão 'Entrar em uma turma' da tela inicial do aluno, e abre a turma."""
+        self.dialogo({"codigo": codigo})
+        self.clicar(self.janela.tela_turmas.botao_entrar)
+
+    def entrar_como_aluno(self, nome="Ana", email="ana@x.com", senha="segredo1", na_turma=True, grupos=False):
+        """Cadastra, entra e (por padrão) entra na turma padrão: termina na tela de pesquisas dela."""
         self.cadastrar(nome, email, senha)
         self.entrar(email, senha)
-        assert self.tela is self.janela.tela_pesquisas
+        assert self.tela is self.janela.tela_turmas
+        if na_turma:
+            self.garantir_turma_padrao(grupos)
+            self.entrar_na_turma()
+            assert self.tela is self.janela.tela_pesquisas
 
-    def entrar_como_professor(self, nome="Profa", email="prof@x.com", senha="segredo1"):
+    def entrar_como_professor(self, nome="Profa", email="prof@x.com", senha="segredo1", lista=True):
+        """Cadastra e entra. Fica com a turma padrão; por padrão já abre a lista de pesquisas."""
         self.cadastrar(nome, email, senha, "professor")
         self.entrar(email, senha)
-        assert self.tela is self.janela.tela_professor
+        assert self.tela is self.janela.tela_turmas_professor
+        from tests.apoio import passar_turmas_para
+
+        passar_turmas_para(email, "TURMA1")
+        if lista:
+            self.janela.abrir_professor()
+            self.app.processEvents()
+            assert self.tela is self.janela.tela_professor
+        else:  # recarrega as turmas, agora que a turma padrão é dela
+            self.janela.abrir_turmas_professor()
+        self.app.processEvents()
+
+    def entrar_de_novo(self, email, senha="segredo1"):
+        self.entrar(email, senha)
+
+    def fechar_tutorial(self, chave):
+        """Combina o próximo diálogo como o tutorial de uma tela e confere o conteúdo."""
+
+        def roteiro(d):
+            assert isinstance(d, DialogoTutorial) and d.chave == chave
+            assert len(d.texto()) > 300
+            d.botao_fechar.click()
+
+        self.roteiros.append(roteiro)
+
+    def entregar(self):
+        self.responder(True)
+        self.clicar(self.janela.tela_pesquisa.botao_entregar)
 
     def criar_pesquisa(self, titulo="Impacto da IA", objetivo="Entender o uso de IA"):
         self.dialogo({"titulo": titulo, "objetivo": objetivo})
@@ -143,6 +192,12 @@ class Cena:
     def adicionar_fonte(self, referencia, link=""):
         self.dialogo({"referencia": referencia, "link": link})
         self.clicar(self.janela.tela_interacao.botao_adicionar_fonte)
+
+    def cartao_de(self, tela, referencia):
+        for cartao in tela.cartoes:
+            if cartao.referencia.text() == referencia:
+                return cartao
+        raise AssertionError(f"fonte não encontrada na tela: {referencia}")
 
     def cartao(self, referencia):
         for cartao in self.janela.tela_interacao.cartoes:
@@ -204,7 +259,7 @@ def test_criar_conta_e_entrar_pela_tela(cena):
 
     cena.digitar(a.login_senha, "segredo1")
     cena.clicar(a.botao_entrar)
-    assert cena.tela is cena.janela.tela_pesquisas
+    assert cena.tela is cena.janela.tela_turmas  # o aluno começa pelas turmas
     assert "Ana · Aluno" in cena.janela.rotulo_usuario.text()
 
 
@@ -213,7 +268,7 @@ def test_enter_no_campo_de_senha_tambem_entra(cena):
     a = cena.janela.tela_acesso
     cena.digitar(a.login_senha, "segredo1")
     QTest.keyClick(a.login_senha, Qt.Key_Return)
-    assert cena.tela is cena.janela.tela_pesquisas
+    assert cena.tela is cena.janela.tela_turmas
 
 
 def test_login_errado_mostra_o_motivo_e_nao_entra(cena):
@@ -384,13 +439,12 @@ def test_excluir_pesquisa_pede_confirmacao_e_volta_para_a_lista(cena):
     assert "Pesquisa excluída" in cena.aviso
 
 
-def test_pesquisa_concluida_nao_mostra_o_botao_de_excluir(cena):
+def test_pesquisa_entregue_nao_mostra_o_botao_de_excluir(cena):
     montar_pesquisa_com_tres_fontes(cena)
     t = cena.janela.tela_pesquisa
     assert t.botao_excluir.isVisible()
     cena.responder(True)
-    cena.clicar(t.botao_concluir)
-    cena.clicar(cena.janela.tela_relatorio.botao_voltar)
+    cena.clicar(t.botao_entregar)
     assert not cena.janela.tela_pesquisa.botao_excluir.isVisible()
 
 
@@ -525,86 +579,338 @@ def montar_pesquisa_com_tres_fontes(cena):
     cena.clicar(cena.janela.tela_interacao.botao_voltar)
 
 
-def test_aluno_ve_a_previa_do_relatorio_antes_de_concluir(cena):
+def test_aluno_ve_a_previa_do_relatorio_antes_de_entregar(cena):
     montar_pesquisa_com_tres_fontes(cena)
     cena.clicar(cena.janela.tela_pesquisa.botao_relatorio)
     r = cena.janela.tela_relatorio
     assert cena.tela is r
     texto = r.texto()
-    assert "Prévia: a pesquisa ainda não foi concluída" in texto
-    assert "Ao concluir a pesquisa" in cena.textos(r)
+    assert "Prévia: a pesquisa ainda não foi entregue ao professor" in texto
+    assert "Ao entregar a pesquisa" in cena.textos(r)
     # o texto do usuário aparece como foi digitado, sem virar HTML
     assert "Grande <b>efeito</b>." in texto
     cena.clicar(r.botao_voltar)
     assert cena.tela is cena.janela.tela_pesquisa
 
 
-def test_concluir_avisa_das_fontes_pendentes_gera_o_relatorio_e_trava_a_pesquisa(cena):
+def test_o_aluno_so_entrega_nao_conclui(cena):
+    montar_pesquisa_com_tres_fontes(cena)
+    t = cena.janela.tela_pesquisa
+    assert t.botao_entregar.text() == "Entregar para o professor"
+    assert not hasattr(t, "botao_concluir") and "Concluir pesquisa" not in cena.textos(cena.janela)
+
+
+def test_entregar_avisa_das_fontes_pendentes_e_trava_a_pesquisa(cena):
     montar_pesquisa_com_tres_fontes(cena)
     t = cena.janela.tela_pesquisa
     cena.responder(False)
-    cena.clicar(t.botao_concluir)  # o aluno desiste
+    cena.clicar(t.botao_entregar)  # o aluno desiste
     assert "1 fonte sem verificar" in cena.perguntas[-1][1]
     assert cena.tela is t and t.pesquisa.status == "em_andamento"
 
     cena.responder(True)
-    cena.clicar(t.botao_concluir)
+    cena.clicar(t.botao_entregar)
+    t = cena.janela.tela_pesquisa
+    assert cena.tela is t and t.pesquisa.status == "entregue"
+    assert "Entregue ao professor" in t.selo.text()
+    assert "Ele está revisando" in cena.textos(t) and "Pesquisa entregue" in cena.aviso
+    for escondido in (t.botao_editar, t.botao_entregar, t.botao_nova_interacao, t.botao_excluir):
+        assert not escondido.isVisible()
+    assert t.botao_relatorio.isVisible() and t.botao_relatorio.text() == "Ver relatório"
+
+    # o relatório já é o que o professor recebe
+    cena.clicar(t.botao_relatorio)
     r = cena.janela.tela_relatorio
-    assert cena.tela is r
     texto = r.texto()
-    assert "Entregue em" in texto and "Prévia" not in texto
+    assert "aguardando a revisão do professor" in texto and "Prévia" not in texto
     assert "Impacto da IA" in texto and "Ana" in texto
     assert "1 verificada" in texto and "1 incorreta" in texto and "1 não verificada" in texto
     assert "“A IA mudou o ensino.”" in texto and "(§2)" in texto  # RF28
     assert "Anotação do aluno: O DOI não existe" in texto  # RF18
-    assert "disponível para o professor" in cena.aviso
-
     cena.clicar(r.botao_voltar)
-    t = cena.janela.tela_pesquisa
-    assert "Concluída" in t.selo.text()
-    for escondido in (t.botao_editar, t.botao_concluir, t.botao_nova_interacao):
-        assert not escondido.isVisible()
-    assert t.botao_relatorio.isVisible() and t.botao_relatorio.text() == "Ver relatório"
-    # e a interação e as fontes também não podem mais ser alteradas
-    cena.clicar(t.linhas[0])
+
+    # e a interação e as fontes também não podem mais ser alteradas pelo aluno
+    cena.clicar(cena.janela.tela_pesquisa.linhas[0])
     i = cena.janela.tela_interacao
     assert not i.botao_editar.isVisible() and not i.botao_excluir.isVisible()
     assert not i.botao_adicionar_fonte.isVisible()
     assert all(not c.botao_verificar.isVisible() for c in i.cartoes)
 
 
-def test_professor_so_ve_o_que_foi_entregue_e_abre_o_relatorio(cena):
+# ================================================================ área do professor: acompanhar e revisar
+def pesquisa_entregue_e_rascunho(cena):
+    """Ana entrega 'Impacto da IA' (3 fontes) e deixa 'Rascunho' em andamento; depois entra a professora."""
     montar_pesquisa_com_tres_fontes(cena)
-    cena.responder(True)
-    cena.clicar(cena.janela.tela_pesquisa.botao_concluir)
-    # Ana ainda cria outra pesquisa e não conclui
-    cena.clicar(cena.janela.tela_relatorio.botao_voltar)
+    cena.entregar()
     cena.clicar(cena.janela.tela_pesquisa.botao_voltar)
     cena.criar_pesquisa("Rascunho", "Ainda escrevendo")
+    cena.registrar_interacao("Gemini", "Pergunta solta", "Resposta solta")
+    cena.adicionar_fonte("Lima (2021)")
     cena.sair()
-
     cena.entrar_como_professor()
+
+
+def test_professor_ve_todas_as_pesquisas_em_secoes_e_so_abre_o_relatorio_das_entregues(cena):
+    pesquisa_entregue_e_rascunho(cena)
     p = cena.janela.tela_professor
+    assert len(p.linhas) == 2
     assert "Profa · Professor" in cena.janela.rotulo_usuario.text()
-    assert len(p.linhas) == 1  # só a entregue
-    linha = cena.textos(p.linhas[0])
-    assert "Ana" in linha and "Impacto da IA" in linha and "Rascunho" not in cena.textos(p)
-    assert "1/3 verificadas" in linha and "1 incorreta" in linha and "1 pendente" in linha
-    cena.clicar(p.linhas[0])
+    assert "Aguardando sua revisão (1)" in p.titulos_das_secoes["entregue"].text()
+    assert "Em andamento com os alunos (1)" in p.titulos_das_secoes["em_andamento"].text()
+    assert "concluida" not in p.titulos_das_secoes  # não há seção vazia
+
+    [entregue] = p.secoes["entregue"]
+    [andamento] = p.secoes["em_andamento"]
+    texto = cena.textos(entregue)
+    assert "Impacto da IA" in texto and "Ana" in texto and "1 interação" in texto
+    assert "1 verificada" in texto and "1 incorreta" in texto and "1 pendente" in texto
+    assert "Entregue em" in texto
+    assert entregue.caixa.isChecked() and entregue.botao_relatorio.isEnabled()
+    assert "Aguardando sua revisão" in entregue.selo.text()
+
+    # em andamento: o "cheque" fica vazio, o relatório fica cinza e ele só acompanha
+    assert "Rascunho" in cena.textos(andamento) and "Ainda com o aluno" in cena.textos(andamento)
+    assert not andamento.caixa.isChecked() and not andamento.botao_relatorio.isEnabled()
+
+    # o relatório da entregue abre pelo botão da caixa
+    cena.clicar(entregue.botao_relatorio)
     r = cena.janela.tela_relatorio
-    assert cena.tela is r
-    assert "Entregue em" in r.texto() and "“A IA mudou o ensino.”" in r.texto()
+    assert cena.tela is r and "“A IA mudou o ensino.”" in r.texto()
     assert "Isto é uma prévia" not in cena.textos(r)
     cena.clicar(r.botao_voltar)
     assert cena.tela is p
 
 
-def test_professor_sem_entregas_ve_a_mensagem_de_lista_vazia(cena):
+def test_lista_do_professor_vazia_convida_a_esperar_os_alunos(cena):
+    cena.entrar_como_professor()
+    assert "Nenhum aluno criou uma pesquisa ainda" in cena.textos(cena.tela)
+
+
+def test_professor_acompanha_pesquisa_em_andamento_sem_poder_alterar_nada(cena):
+    pesquisa_entregue_e_rascunho(cena)
+    p = cena.janela.tela_professor
+    cena.clicar(p.secoes["em_andamento"][0])
+    rev = cena.janela.tela_revisao
+    assert cena.tela is rev and "Aluno: Ana" in cena.textos(rev)
+    assert "Em andamento com o aluno" in cena.textos(rev)
+    assert not rev.botao_relatorio.isEnabled()  # relatório só depois da entrega
+    assert not rev.botao_aceitar.isVisible() and not rev.botao_devolver.isVisible()
+    cena.clicar(rev.linhas[0])
+    ri = cena.janela.tela_revisao_interacao
+    assert cena.tela is ri and "Pergunta solta" in ri.painel_pergunta.texto.text()
+    assert not ri.botao_comentar.isVisible() and not ri.botao_confirmar.isVisible()
+    assert all(not c.botao_julgar.isVisible() for c in ri.cartoes)
+    assert "só pode julgar e comentar depois que ele entregar" in cena.textos(ri)
+    # e o serviço recusa mesmo se alguém tentar por fora
+    assert cena.janela.tentar(cena.janela.revisoes.aceitar, rev.pesquisa_id) is cena.janela.FALHOU
+    assert "ainda não entregou" in cena.aviso
+
+
+def test_fluxo_completo_entrega_revisao_devolucao_reajuste_e_aceite(cena):
+    # --- Ana monta e entrega (2 interações; a 2ª com uma fonte ainda pendente)
+    montar_pesquisa_com_tres_fontes(cena)
+    cena.registrar_interacao("Claude", "Segunda pergunta", "Segunda resposta")
+    cena.adicionar_fonte("Lima (2021)")
+    cena.verificacao("verificada", "Ok", "Outro trecho do meu texto")
+    cena.clicar(cena.cartao("Lima (2021)").botao_verificar)
+    cena.clicar(cena.janela.tela_interacao.botao_voltar)
+    cena.entregar()
+    cena.sair()
+
+    # --- a professora revisa a 1ª interação
+    cena.entrar_como_professor()
+    p = cena.janela.tela_professor
+    cena.clicar(p.linhas[0])
+    rev = cena.janela.tela_revisao
+    assert rev.botao_aceitar.isVisible() and rev.botao_devolver.isVisible() and rev.botao_relatorio.isEnabled()
+    assert "aguardando a sua revisão" in cena.textos(rev)
+    cena.clicar(rev.linhas[0])
+    ri = cena.janela.tela_revisao_interacao
+
+    # ela desverifica a fonte que o aluno marcou como verificada (e é avisada dos trechos)
+    avisos = []
+
+    def desverificar(d):
+        assert d.professor and not d.grupo_trecho.isVisibleTo(d)  # o trecho é do texto do aluno: ele não liga
+        d.opcoes["nao_verificada"].setChecked(True)
+        avisos.append(d.aviso_trechos.isVisibleTo(d))
+
+    cena.verificacao("nao_verificada", "Ainda não achei", antes=desverificar)
+    cena.clicar(cena.cartao_de(ri, "Silva (2023)").botao_julgar)
+    assert avisos == [True]  # avisa que o trecho que o aluno ligou sai junto
+    ri = cena.janela.tela_revisao_interacao
+    silva = cena.cartao_de(ri, "Silva (2023)")
+    assert "Não verificada" in silva.selo.text() and "Julgada pelo professor" in silva.selo_professor.text()
+    assert "Anotação do professor: Ainda não achei" in cena.textos(silva)
+    assert silva.trechos == []  # os trechos do aluno saíram junto
+
+    # confirmar com fonte pendente é recusado
+    cena.responder(True)
+    cena.clicar(ri.botao_confirmar)
+    assert "Julgue todas as fontes" in cena.aviso
+
+    # julga as pendentes e confirma
+    cena.verificacao("incorreta", "Não existe")
+    cena.clicar(cena.cartao_de(ri, "Silva (2023)").botao_julgar)
+    ri = cena.janela.tela_revisao_interacao
+    cena.verificacao("verificada", "Confere no catálogo")
+    cena.clicar(cena.cartao_de(ri, "Souza (2020)").botao_julgar)
+    ri = cena.janela.tela_revisao_interacao
+    cena.responder(True)
+    cena.clicar(ri.botao_confirmar)
+    ri = cena.janela.tela_revisao_interacao
+    assert "Confirmada" in cena.textos(ri) and ri.botao_reabrir.isVisible()
+    assert all(not c.botao_julgar.isVisible() for c in ri.cartoes)  # fechada: precisa reabrir para julgar
+
+    # comentário
+    cena.dialogo({"comentario": "Troque a fonte Silva por uma que exista."})
+    cena.clicar(ri.botao_comentar)
+    ri = cena.janela.tela_revisao_interacao
+    assert "Troque a fonte Silva" in ri.comentario.texto.text() and ri.botao_comentar.text() == "Editar comentário"
+
+    # volta à pesquisa: a lista mostra a 1ª confirmada e comentada
+    cena.clicar(ri.botao_voltar)
+    rev = cena.janela.tela_revisao
+    assert [s.text() for s in rev.linhas[0].selos] == ["Confirmada", "Comentada"]
+    assert rev.linhas[1].selos == []
+
+    # devolver exige mensagem: vazia é recusada dentro do diálogo
+    erros = []
+    cena.dialogo({"mensagem": "   "}, depois=lambda d: erros.append(d.erro.text()))
+    cena.clicar(rev.botao_devolver)
+    assert erros and "mensagem" in erros[0]
+    assert cena.janela.tela_revisao.pesquisa.status == "entregue"
+    cena.dialogo({"mensagem": "A fonte Silva não existe e a 2ª interação precisa de ajuste."})
+    cena.clicar(rev.botao_devolver)
+    rev = cena.janela.tela_revisao
+    assert "Devolvida para ajustes" in rev.selo.text()
+    assert "A fonte Silva não existe" in cena.textos(rev) and "Pesquisa devolvida" in cena.aviso
+    assert not rev.botao_aceitar.isVisible() and not rev.botao_devolver.isVisible()
+    cena.sair()
+
+    # --- Ana vê a mensagem e reajusta só o que está aberto
+    cena.entrar_de_novo("ana@x.com")
+    cena.clicar(cena.janela.tela_turmas.linhas[0])  # abre a turma
+    assert "Devolvida para ajustes" in cena.textos(cena.janela.tela_pesquisas.linhas[0])
+    cena.clicar(cena.janela.tela_pesquisas.linhas[0])
+    t = cena.janela.tela_pesquisa
+    assert "Devolvida para ajustes" in t.selo.text()
+    assert "O professor devolveu esta pesquisa" in t.recado.titulo.text()
+    assert "A fonte Silva não existe" in t.recado.texto.text()
+    assert t.botao_entregar.isVisible() and t.botao_editar.isVisible() and t.botao_nova_interacao.isVisible()
+    assert [s.text() for s in t.linhas[0].selos] == ["Confirmada", "Comentário do professor"]
+
+    cena.clicar(t.linhas[0])  # interação confirmada: fechada para o aluno
+    i = cena.janela.tela_interacao
+    assert "Troque a fonte Silva" in i.comentario.texto.text()
+    assert not i.botao_editar.isVisible() and not i.botao_excluir.isVisible() and not i.botao_adicionar_fonte.isVisible()
+    assert all(not c.botao_verificar.isVisible() for c in i.cartoes)
+    assert "crie uma nova interação" in cena.textos(i)
+    assert "Anotação do professor: Não existe" in cena.textos(cena.cartao("Silva (2023)"))
+    cena.clicar(i.botao_voltar)
+
+    cena.clicar(cena.janela.tela_pesquisa.linhas[1])  # a 2ª ficou aberta
+    i = cena.janela.tela_interacao
+    assert i.botao_editar.isVisible() and i.botao_adicionar_fonte.isVisible()
+    cena.clicar(i.botao_voltar)
+    cena.dialogo({"ferramenta": "ChatGPT", "pergunta": "Nova pergunta", "resposta": "Nova resposta"})
+    cena.clicar(cena.janela.tela_pesquisa.botao_nova_interacao)  # nova interação no lugar da fechada
+    cena.clicar(cena.janela.tela_interacao.botao_voltar)
+    cena.entregar()
+    t = cena.janela.tela_pesquisa
+    assert t.pesquisa.status == "entregue" and not t.botao_entregar.isVisible()
+    cena.sair()
+
+    # --- a professora aceita
+    cena.entrar_de_novo("prof@x.com")
+    assert cena.tela is cena.janela.tela_turmas_professor  # a professora começa pelas turmas
+    cena.clicar(cena.janela.tela_turmas_professor.botao_pesquisas)
+    cena.clicar(cena.janela.tela_professor.secoes["entregue"][0])
+    rev = cena.janela.tela_revisao
+    cena.responder(False)
+    cena.clicar(rev.botao_aceitar)  # desiste uma vez
+    assert "interações ainda não confirmadas serão fechadas" in cena.perguntas[-1][1] or "interação ainda não confirmada" in cena.perguntas[-1][1]
+    cena.responder(True)
+    cena.clicar(rev.botao_aceitar)
+    rev = cena.janela.tela_revisao
+    assert "Concluída" in rev.selo.text() and "Pesquisa aceita" in cena.aviso
+    assert not rev.botao_aceitar.isVisible() and not rev.botao_devolver.isVisible()
+    cena.clicar(rev.botao_relatorio)
+    texto = cena.janela.tela_relatorio.texto()
+    assert "Concluída: aceita pelo professor" in texto
+    assert "Comentário do professor" in texto and "Troque a fonte Silva" in texto
+    assert "Julgada pelo professor" in texto and "confirmada pelo professor" in texto
+    cena.sair()
+
+    # --- Ana vê a pesquisa concluída e fechada
+    cena.entrar_de_novo("ana@x.com")
+    cena.clicar(cena.janela.tela_turmas.linhas[0])
+    cena.clicar(cena.janela.tela_pesquisas.linhas[0])
+    t = cena.janela.tela_pesquisa
+    assert "Concluída" in t.selo.text() and "A pesquisa foi aceita" in t.recado.texto.text()
+    assert not t.botao_entregar.isVisible() and not t.botao_nova_interacao.isVisible()
+
+
+# ================================================================ tutoriais
+def test_cada_tela_tem_o_seu_botao_de_tutorial_e_ele_abre_a_explicacao_certa(cena):
+    j = cena.janela
     cena.entrar_como_aluno()
+    cena.fechar_tutorial("aluno_pesquisas")
+    cena.clicar(j.tela_pesquisas.botao_tutorial)
     cena.criar_pesquisa()
+    cena.fechar_tutorial("aluno_pesquisa")
+    cena.clicar(j.tela_pesquisa.botao_tutorial)
+    cena.registrar_interacao()
+    cena.fechar_tutorial("aluno_interacao")
+    cena.clicar(j.tela_interacao.botao_tutorial)
+    cena.clicar(j.tela_interacao.botao_voltar)
+    cena.clicar(j.tela_pesquisa.botao_relatorio)
+    cena.fechar_tutorial("relatorio_aluno")
+    cena.clicar(j.tela_relatorio.botao_tutorial)
+    # com a pesquisa entregue o aluno continua com o tutorial nas telas travadas
+    cena.clicar(j.tela_relatorio.botao_voltar)
+    cena.entregar()
+    cena.fechar_tutorial("aluno_pesquisa")
+    cena.clicar(j.tela_pesquisa.botao_tutorial)
+    cena.clicar(j.tela_pesquisa.linhas[0])
+    cena.fechar_tutorial("aluno_interacao")
+    cena.clicar(j.tela_interacao.botao_tutorial)
+    cena.sair()
+
+    cena.entrar_como_professor()
+    cena.fechar_tutorial("prof_lista")
+    cena.clicar(j.tela_professor.botao_tutorial)
+    cena.clicar(j.tela_professor.linhas[0])
+    cena.fechar_tutorial("prof_pesquisa")
+    cena.clicar(j.tela_revisao.botao_tutorial)
+    cena.clicar(j.tela_revisao.botao_relatorio)
+    cena.fechar_tutorial("relatorio_professor")
+    cena.clicar(j.tela_relatorio.botao_tutorial)
+    cena.clicar(j.tela_relatorio.botao_voltar)
+
+
+def test_tutorial_do_professor_na_tela_da_interacao(cena):
+    montar_pesquisa_com_tres_fontes(cena)
+    cena.entregar()
     cena.sair()
     cena.entrar_como_professor()
-    assert "Nenhum relatório recebido ainda" in cena.textos(cena.tela)
+    cena.clicar(cena.janela.tela_professor.linhas[0])
+    cena.clicar(cena.janela.tela_revisao.linhas[0])
+    cena.fechar_tutorial("prof_interacao")
+    cena.clicar(cena.janela.tela_revisao_interacao.botao_tutorial)
+
+
+def test_todo_tutorial_tem_texto_completo_e_o_dialogo_mostra_tudo(app):
+    from ui.tutoriais import TUTORIAIS
+
+    for chave, t in TUTORIAIS.items():
+        d = DialogoTutorial(None, chave)
+        texto = d.texto()
+        assert t["titulo"] in texto and t["abertura"] in texto, chave
+        for cabecalho, topicos in t["secoes"]:
+            assert cabecalho in texto and all(x in texto for x in topicos), chave
+        assert len(t["secoes"]) >= 2 and all(len(topicos) >= 1 for _, topicos in t["secoes"])
+        d.deleteLater()
 
 
 def test_salvar_o_relatorio_em_pdf(cena):
@@ -634,6 +940,10 @@ def test_aluno_nao_abre_a_area_do_professor(cena):
     assert cena.tela is j.tela_pesquisas and "exclusiva de professores" in cena.aviso
     assert j.abrir_professor() is False
     assert cena.tela is j.tela_pesquisas
+    # nem as telas de revisão, mesmo sabendo o número da pesquisa e da interação
+    for abrir in (lambda: j.abrir_revisao(1), lambda: j.abrir_revisao_interacao(1)):
+        assert abrir() is False
+        assert cena.tela is j.tela_pesquisas and "exclusiva de professores" in cena.aviso
 
 
 def test_professor_nao_abre_as_telas_do_aluno_nem_por_numero(cena):
@@ -643,9 +953,11 @@ def test_professor_nao_abre_as_telas_do_aluno_nem_por_numero(cena):
     cena.sair()
     cena.entrar_como_professor()
     j = cena.janela
-    for abrir in (j.abrir_pesquisas, lambda: j.abrir_pesquisa(1), lambda: j.abrir_interacao(1)):
+    for abrir in (j.abrir_turmas, lambda: j.abrir_pesquisas(1), lambda: j.abrir_pesquisa(1), lambda: j.abrir_interacao(1)):
         assert abrir() is False
         assert cena.tela is j.tela_professor and "exclusiva de alunos" in cena.aviso
+    # o serviço de aluno também recusa o professor, mesmo sem passar pela tela
+    assert j.tentar(j.pesquisas.entregar, 1) is j.FALHOU and "alunos" in cena.aviso
     # o relatório de uma pesquisa em andamento também não abre para ele
     assert j.abrir_relatorio(1, "‹ Voltar", j.abrir_professor) is False
     assert cena.tela is j.tela_professor and "não encontrada" in cena.aviso
@@ -653,7 +965,11 @@ def test_professor_nao_abre_as_telas_do_aluno_nem_por_numero(cena):
 
 def test_sem_login_so_a_tela_de_acesso_abre(cena):
     j = cena.janela
-    for abrir in (j.abrir_pesquisas, j.abrir_professor, lambda: j.abrir_pesquisa(1), lambda: j.abrir_interacao(1)):
+    for abrir in (
+        j.abrir_turmas, lambda: j.abrir_pesquisas(1), j.abrir_professor, j.abrir_turmas_professor,
+        lambda: j.abrir_turma_professor(1), lambda: j.abrir_pesquisa(1), lambda: j.abrir_interacao(1),
+        lambda: j.abrir_revisao(1), lambda: j.abrir_revisao_interacao(1),
+    ):
         assert abrir() is False
         assert cena.tela is j.tela_acesso and "Entre na sua conta" in cena.aviso
 

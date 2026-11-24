@@ -7,10 +7,13 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QLabel, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 
 from services.fonte_service import FonteService
+from services.grupo_service import GrupoService
 from services.interacao_service import InteracaoService
 from services.pesquisa_service import PesquisaService
 from services.relatorio_service import RelatorioService
+from services.revisao_service import RevisaoService
 from services.sessao import sessao
+from services.turma_service import TurmaService
 from services.usuario_service import UsuarioService
 from ui import componentes as c
 from ui.tela_acesso import TelaAcesso
@@ -18,6 +21,11 @@ from ui.tela_interacao import TelaInteracao
 from ui.tela_pesquisa import TelaPesquisa
 from ui.tela_pesquisas import TelaPesquisas
 from ui.tela_professor import TelaProfessor
+from ui.tela_turma_professor import TelaTurmaProfessor
+from ui.tela_turmas import TelaTurmas
+from ui.tela_turmas_professor import TelaTurmasProfessor
+from ui.tela_revisao import TelaRevisao
+from ui.tela_revisao_interacao import TelaRevisaoInteracao
 from ui.tela_relatorio import TelaRelatorio
 
 NOME_DO_PERFIL = {"aluno": "Aluno", "professor": "Professor"}
@@ -37,6 +45,9 @@ class JanelaPrincipal(QMainWindow):
         self.interacoes = InteracaoService()
         self.fontes = FonteService()
         self.relatorios = RelatorioService()
+        self.revisoes = RevisaoService()
+        self.turmas = TurmaService()
+        self.grupos = GrupoService()
 
         central = QWidget()
         central.setObjectName("fundo")
@@ -59,22 +70,34 @@ class JanelaPrincipal(QMainWindow):
         self._timer_aviso.timeout.connect(self.limpar_aviso)
 
         self.tela_acesso = TelaAcesso(self)
+        self.tela_turmas = TelaTurmas(self)
         self.tela_pesquisas = TelaPesquisas(self)
         self.tela_pesquisa = TelaPesquisa(self)
         self.tela_interacao = TelaInteracao(self)
         self.tela_relatorio = TelaRelatorio(self)
+        self.tela_turmas_professor = TelaTurmasProfessor(self)
+        self.tela_turma_professor = TelaTurmaProfessor(self)
         self.tela_professor = TelaProfessor(self)
+        self.tela_revisao = TelaRevisao(self)
+        self.tela_revisao_interacao = TelaRevisaoInteracao(self)
         for tela in (
-            self.tela_acesso, self.tela_pesquisas, self.tela_pesquisa,
-            self.tela_interacao, self.tela_relatorio, self.tela_professor,
+            self.tela_acesso, self.tela_turmas, self.tela_pesquisas, self.tela_pesquisa,
+            self.tela_interacao, self.tela_relatorio, self.tela_turmas_professor,
+            self.tela_turma_professor, self.tela_professor,
+            self.tela_revisao, self.tela_revisao_interacao,
         ):
             self.pilha.addWidget(tela)
         # Quem pode abrir cada tela. O relatório é aberto pelos dois; o service decide o que cada um vê.
         self._perfil_da_tela = {
+            self.tela_turmas: "aluno",
             self.tela_pesquisas: "aluno",
             self.tela_pesquisa: "aluno",
             self.tela_interacao: "aluno",
+            self.tela_turmas_professor: "professor",
+            self.tela_turma_professor: "professor",
             self.tela_professor: "professor",
+            self.tela_revisao: "professor",
+            self.tela_revisao_interacao: "professor",
         }
         self.ir_para_acesso()
 
@@ -165,8 +188,8 @@ class JanelaPrincipal(QMainWindow):
             self.ir_para_acesso()
             return False
         if sessao.usuario.tipo == "professor":
-            return self.abrir_professor()
-        return self.abrir_pesquisas()
+            return self.abrir_turmas_professor()
+        return self.abrir_turmas()
 
     def _abrir(self, tela, carregar, *args):
         if self.perfil is None:
@@ -178,8 +201,12 @@ class JanelaPrincipal(QMainWindow):
             return False
         return self.mostrar(tela)
 
-    def abrir_pesquisas(self):
-        return self._abrir(self.tela_pesquisas, self.tela_pesquisas.carregar)
+    def abrir_turmas(self):
+        return self._abrir(self.tela_turmas, self.tela_turmas.carregar)
+
+    def abrir_pesquisas(self, turma_id, visao="individuais"):
+        """A turma do aluno: visao 'individuais' ou 'grupos'."""
+        return self._abrir(self.tela_pesquisas, self.tela_pesquisas.carregar, turma_id, visao)
 
     def abrir_pesquisa(self, pesquisa_id):
         return self._abrir(self.tela_pesquisa, self.tela_pesquisa.carregar, pesquisa_id)
@@ -190,8 +217,22 @@ class JanelaPrincipal(QMainWindow):
     def abrir_relatorio(self, pesquisa_id, texto_voltar, acao_voltar):
         return self._abrir(self.tela_relatorio, self.tela_relatorio.carregar, pesquisa_id, texto_voltar, acao_voltar)
 
-    def abrir_professor(self):
-        return self._abrir(self.tela_professor, self.tela_professor.carregar)
+    def abrir_turmas_professor(self):
+        return self._abrir(self.tela_turmas_professor, self.tela_turmas_professor.carregar)
+
+    def abrir_turma_professor(self, turma_id, visao="alunos"):
+        """A turma do professor: visao 'alunos' ou 'grupos'."""
+        return self._abrir(self.tela_turma_professor, self.tela_turma_professor.carregar, turma_id, visao)
+
+    def abrir_professor(self, turma_id=None):
+        """Lista de pesquisas das turmas do professor, todas ou só de uma (turma_id)."""
+        return self._abrir(self.tela_professor, self.tela_professor.carregar, turma_id)
+
+    def abrir_revisao(self, pesquisa_id):
+        return self._abrir(self.tela_revisao, self.tela_revisao.carregar, pesquisa_id)
+
+    def abrir_revisao_interacao(self, interacao_id):
+        return self._abrir(self.tela_revisao_interacao, self.tela_revisao_interacao.carregar, interacao_id)
 
     def entrou(self):
         """Chamado pela tela de acesso depois de um login bem-sucedido."""

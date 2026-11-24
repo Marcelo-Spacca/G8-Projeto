@@ -47,6 +47,16 @@ QMainWindow, QWidget#fundo, QScrollArea, QScrollArea > QWidget > QWidget#conteud
 }
 QScrollArea { border: none; }
 
+/* barras de rolagem finas */
+QScrollBar:vertical { background: transparent; width: 12px; margin: 2px; }
+QScrollBar::handle:vertical { background: #C3CBD8; border-radius: 4px; min-height: 36px; }
+QScrollBar::handle:vertical:hover { background: #9AA9C9; }
+QScrollBar:horizontal { background: transparent; height: 12px; margin: 2px; }
+QScrollBar::handle:horizontal { background: #C3CBD8; border-radius: 4px; min-width: 36px; }
+QScrollBar::handle:horizontal:hover { background: #9AA9C9; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
+QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
+
 /* barra superior */
 QFrame#barra { background: $TINTA; }
 QFrame#barra QLabel { color: #FFFFFF; background: transparent; }
@@ -75,6 +85,9 @@ QLabel[papel="ok"] { color: $VERDE; font-size: 13px; }
 QLabel[papel="item"] { font-family: $SERIFA; font-size: 16px; font-weight: 600; color: $TINTA; }
 QLabel[papel="vazio"] { color: $MUDO; font-family: $SERIFA; font-size: 15px; padding: 28px 8px; }
 
+QLabel[papel="recado_titulo"] { font-weight: 700; font-size: 14px; background: transparent; }
+QLabel[papel="recado_texto"] { font-family: $SERIFA; font-size: 15px; background: transparent; }
+
 /* selos de status */
 QLabel[chip] { padding: 3px 11px; border-radius: 10px; font-size: 12px; font-weight: 600; }
 QLabel[chip="verificada"] { background: $VERDE_FUNDO; color: $VERDE; }
@@ -96,6 +109,20 @@ QPushButton[tipo="primario"]:hover { background: $PRIMARIO_FORTE; }
 QPushButton[tipo="primario"]:disabled { background: #AAB6D3; border-color: #AAB6D3; color: #FFFFFF; }
 QPushButton[tipo="perigo"] { color: $VERMELHO; border: 1px solid #E3B4AE; }
 QPushButton[tipo="perigo"]:hover { background: $VERMELHO_FUNDO; }
+QPushButton[tipo="ajuda"] {
+    background: $SUPERFICIE; color: $PRIMARIO; border: 1px solid #B9C2D0; border-radius: 13px;
+    padding: 4px 12px; font-size: 12px; font-weight: 600; min-height: 18px;
+}
+QPushButton[tipo="ajuda"]:hover { background: $REALCE; border-color: $PRIMARIO; }
+QPushButton[tipo="ajuda"]:focus { border: 2px solid $PRIMARIO; padding: 3px 11px; }
+QPushButton[tipo="aba"] {
+    background: transparent; border: none; border-bottom: 3px solid transparent; border-radius: 0;
+    padding: 8px 18px; color: $MUDO; font-size: 15px;
+}
+QPushButton[tipo="aba"]:hover { background: transparent; color: $TINTA; }
+QPushButton[tipo="aba"][ativa="sim"] { color: $TINTA; border-bottom: 3px solid $PRIMARIO; }
+QPushButton[tipo="aba"]:focus { border: none; border-bottom: 3px solid $PRIMARIO; padding: 8px 18px; }
+QPushButton[tipo="aba"]:disabled { color: #B3BBC8; background: transparent; border-bottom: 3px solid transparent; }
 QPushButton[tipo="link"] {
     background: transparent; border: none; color: $PRIMARIO; padding: 4px 2px; font-weight: 600;
 }
@@ -107,7 +134,24 @@ QLineEdit, QPlainTextEdit, QTextEdit {
     selection-background-color: $PRIMARIO; selection-color: #FFFFFF;
 }
 QLineEdit:focus, QPlainTextEdit:focus { border: 2px solid $PRIMARIO; padding: 7px 9px; }
-QRadioButton { spacing: 8px; padding: 4px 0; }
+QComboBox {
+    background: $SUPERFICIE; color: $TEXTO; border: 1px solid #B9C2D0; border-radius: 6px;
+    padding: 6px 12px; min-height: 22px; min-width: 200px;
+}
+QComboBox:hover { background: $REALCE; }
+QComboBox:focus { border: 2px solid $PRIMARIO; padding: 5px 11px; }
+QComboBox::drop-down { border: none; width: 28px; }
+QComboBox QAbstractItemView, QComboBoxPrivateContainer {
+    background: $SUPERFICIE; color: $TEXTO; border: 1px solid #B9C2D0; outline: 0; padding: 4px;
+    selection-background-color: $REALCE; selection-color: $TINTA;
+}
+QComboBox QAbstractItemView::item { min-height: 30px; padding: 2px 10px; color: $TEXTO; background: $SUPERFICIE; }
+QComboBox QAbstractItemView::item:hover, QComboBox QAbstractItemView::item:selected { background: $REALCE; color: $TINTA; }
+QRadioButton, QCheckBox { spacing: 8px; padding: 4px 0; }
+QLabel[papel="codigo"] {
+    font-family: "Consolas", "DejaVu Sans Mono", monospace; font-size: 15px; font-weight: 700;
+    color: $TINTA; background: #E9EDF3; border: 1px dashed #9AA9C9; border-radius: 6px; padding: 3px 12px;
+}
 QTextBrowser { background: $SUPERFICIE; border: 1px solid $LINHA; border-radius: 8px; padding: 14px; font-family: $SERIFA; font-size: 14px; }
 
 /* listas: linhas separadas por fio, sem um cartão para cada item */
@@ -129,11 +173,23 @@ QLabel[papel="trecho"] {
     background: #F3F5F9; border-left: 3px solid #9AA9C9; padding: 6px 10px;
 }
 
+/* recados: devolução do professor, comentários e avisos de estado */
+QFrame[papel="recado"] { border-radius: 8px; border: 1px solid $LINHA; background: #FFFFFF; }
+QFrame[papel="recado"][tipo="devolucao"] { background: $VERMELHO_FUNDO; border: 1px solid #E3B4AE; border-left: 6px solid $VERMELHO; }
+QFrame[papel="recado"][tipo="devolucao"] QLabel[papel="recado_titulo"] { color: $VERMELHO; }
+QFrame[papel="recado"][tipo="comentario"] { background: $AZUL_FUNDO; border: 1px solid #C5D2EE; border-left: 6px solid $PRIMARIO; }
+QFrame[papel="recado"][tipo="comentario"] QLabel[papel="recado_titulo"] { color: $PRIMARIO; }
+QFrame[papel="recado"][tipo="aviso"] { background: $AMBAR_FUNDO; border: 1px solid #EBCB85; border-left: 6px solid #E0A526; }
+QFrame[papel="recado"][tipo="aviso"] QLabel[papel="recado_titulo"] { color: $AMBAR; }
+QFrame[papel="recado"][tipo="ok"] { background: $VERDE_FUNDO; border: 1px solid #A8D5BB; border-left: 6px solid $VERDE; }
+QFrame[papel="recado"][tipo="ok"] QLabel[papel="recado_titulo"] { color: $VERDE; }
+
 /* painéis de texto (pergunta e resposta) */
 QFrame[papel="painel"] { background: $SUPERFICIE; border: 1px solid $LINHA; border-radius: 8px; }
 
 /* janelas de diálogo */
 QDialog { background: $SUPERFICIE; }
+QDialog QScrollArea, QDialog QScrollArea > QWidget > QWidget { background: $SUPERFICIE; }
 QMessageBox { background: $SUPERFICIE; }
 QMessageBox QLabel { color: $TEXTO; }
 QToolTip { background: $TINTA; color: #FFFFFF; border: none; padding: 4px 8px; }
@@ -147,12 +203,40 @@ def folha_de_estilo():
     return _FOLHA.substitute(valores)
 
 
+def paleta_clara():
+    """Paleta completa nas cores do programa. Em vez de partir da paleta do sistema (que no modo escuro
+    é escura), todas as cores que o Qt usa para campos, listas, botões e textos são definidas aqui."""
+    from PySide6.QtGui import QColor, QPalette
+
+    c = QColor
+    paleta = QPalette()
+    cores = {
+        QPalette.Window: PAPEL, QPalette.WindowText: TEXTO,
+        QPalette.Base: SUPERFICIE, QPalette.AlternateBase: PAPEL,
+        QPalette.Text: TEXTO, QPalette.Button: SUPERFICIE, QPalette.ButtonText: TEXTO,
+        QPalette.ToolTipBase: SUPERFICIE, QPalette.ToolTipText: TEXTO,
+        QPalette.PlaceholderText: MUDO, QPalette.BrightText: "#FFFFFF",
+        QPalette.Highlight: PRIMARIO, QPalette.HighlightedText: "#FFFFFF",
+        QPalette.Link: PRIMARIO, QPalette.LinkVisited: PRIMARIO,
+    }
+    for papel, cor in cores.items():
+        paleta.setColor(papel, c(cor))
+    for papel in (QPalette.WindowText, QPalette.Text, QPalette.ButtonText):
+        paleta.setColor(QPalette.Disabled, papel, c(MUDO))
+    return paleta
+
+
 def aplicar(app):
     """Aplica o estilo a todo o programa."""
     from PySide6.QtGui import QColor, QPalette
 
-    paleta = app.palette()
-    paleta.setColor(QPalette.Link, QColor(PRIMARIO))  # links com a cor do programa, não o azul do sistema
-    paleta.setColor(QPalette.LinkVisited, QColor(PRIMARIO))
-    app.setPalette(paleta)
+    # Sempre o tema claro: no modo escuro do Windows, listas suspensas e caixas de diálogo nativas
+    # ficavam escuras e ilegíveis em cima desta folha de estilo clara.
+    try:
+        from PySide6.QtCore import Qt
+
+        app.styleHints().setColorScheme(Qt.ColorScheme.Light)
+    except Exception:  # versões do Qt sem essa chamada
+        pass
+    app.setPalette(paleta_clara())
     app.setStyleSheet(folha_de_estilo())

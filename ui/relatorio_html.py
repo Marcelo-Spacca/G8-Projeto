@@ -30,9 +30,12 @@ def _celula_fonte(fonte):
     partes = [f"<b>{_texto(fonte.referencia)}</b>"]
     if fonte.link:
         partes.append(f"<br>{_link(fonte.link)}")
+    if fonte.julgada_pelo_professor:
+        partes.append(f'<br><span style="color:{estilo.PRIMARIO}"><b>Julgada pelo professor</b></span>')
     if fonte.anotacao_correcao:
+        quem = "professor" if fonte.julgada_pelo_professor else "aluno"
         partes.append(
-            f'<br><span style="color:{estilo.MUDO}">Anotação do aluno: {_texto(fonte.anotacao_correcao)}</span>'
+            f'<br><span style="color:{estilo.MUDO}">Anotação do {quem}: {_texto(fonte.anotacao_correcao)}</span>'
         )
     return f'<td bgcolor="#FFFFFF" valign="top">{"".join(partes)}</td>'
 
@@ -65,10 +68,26 @@ def _bloco_resumo(gerado):
     return f'<table width="98%" cellspacing="6" cellpadding="8"><tr>{celulas}</tr></table>'
 
 
+def _comentario(interacao):
+    if not interacao.comentario_professor:
+        return ""
+    return (
+        f'<table width="98%" cellspacing="0" cellpadding="8"><tr><td bgcolor="{estilo.AZUL_FUNDO}">'
+        f'<b><span style="color:{estilo.PRIMARIO}">Comentário do professor</span></b><br>'
+        f"{_texto(interacao.comentario_professor)}</td></tr></table>"
+    )
+
+
 def _bloco_interacao(numero, interacao):
+    confirmada = (
+        f' <span style="color:{estilo.VERDE}; font-size:11pt">✓ confirmada pelo professor</span>'
+        if interacao.confirmada
+        else ""
+    )
     topo = (
         f'<h3 style="color:{estilo.TINTA}">Interação {numero}: {_texto(interacao.ferramenta_ia)} '
-        f'<span style="color:{estilo.MUDO}; font-weight:normal"> {formatar_data(interacao.data_registro)}</span></h3>'
+        f'<span style="color:{estilo.MUDO}; font-weight:normal"> {formatar_data(interacao.data_registro)}</span>'
+        f"{confirmada}</h3>"
     )
     texto = (
         f'<p><b>Pergunta</b><br>{_texto(interacao.pergunta)}</p>'
@@ -76,7 +95,7 @@ def _bloco_interacao(numero, interacao):
     )
     fontes = sorted(interacao.fontes, key=lambda f: f.id)
     if not fontes:
-        return topo + texto + f'<p style="color:{estilo.MUDO}">Nenhuma fonte citada nesta interação.</p>'
+        return topo + texto + f'<p style="color:{estilo.MUDO}">Nenhuma fonte citada nesta interação.</p>' + _comentario(interacao)
     cabecalho = "".join(
         f'<td bgcolor="#E9EDF3" width="{largura}%"><b>{nome}</b></td>'
         for nome, largura in (("Fonte", 38), ("Status", 22), ("Trecho no texto do aluno", 40))
@@ -88,24 +107,41 @@ def _bloco_interacao(numero, interacao):
         f'<table width="98%" cellspacing="1" cellpadding="8" bgcolor="{estilo.LINHA}">'
         f"<tr>{cabecalho}</tr>{linhas}</table>"
     )
-    return topo + texto + tabela
+    return topo + texto + tabela + _comentario(interacao)
+
+
+def _linhas_de_autoria(p):
+    """Turma e quem assina: o aluno, ou o grupo com os integrantes."""
+    linhas = []
+    if p.turma is not None:
+        linhas.append(f"<tr><td><b>Turma</b></td><td>{_texto(p.turma.nome)}</td></tr>")
+    if p.de_grupo:
+        integrantes = ", ".join(a.nome for a in p.grupo.alunos)
+        linhas.append(f"<tr><td><b>Grupo</b></td><td>{_texto(p.grupo.nome)}</td></tr>")
+        linhas.append(f"<tr><td><b>Integrantes</b></td><td>{_texto(integrantes)}</td></tr>")
+    else:
+        linhas.append(f"<tr><td><b>Aluno</b></td><td>{_texto(p.aluno.nome)}</td></tr>")
+    return "".join(linhas)
 
 
 def montar(gerado):
     """HTML completo do relatório (RF20, RF21, RF28). 'gerado' é o RelatorioGerado do service."""
     p = gerado.pesquisa
-    if gerado.entregue:
-        situacao = f"Entregue em {formatar_data(p.data_conclusao)}"
+    if gerado.concluida:
+        situacao = f"Concluída: aceita pelo professor em {formatar_data(p.data_conclusao)}"
         cor_situacao = estilo.VERDE
+    elif gerado.entregue:
+        situacao = f"Entregue em {formatar_data(p.data_entrega)}, aguardando a revisão do professor"
+        cor_situacao = estilo.AMBAR
     else:
-        situacao = "Prévia: a pesquisa ainda não foi concluída"
+        situacao = "Prévia: a pesquisa ainda não foi entregue ao professor"
         cor_situacao = estilo.AMBAR
     cabecalho = (
         f'<h1 style="color:{estilo.TINTA}">Relatório de uso de IA</h1>'
         f'<p><b><span style="color:{cor_situacao}">{situacao}</span></b></p>'
         '<table cellspacing="0" cellpadding="3">'
         f"<tr><td><b>Pesquisa</b></td><td>{_texto(p.titulo)}</td></tr>"
-        f"<tr><td><b>Aluno</b></td><td>{_texto(p.aluno.nome)}</td></tr>"
+        f"{_linhas_de_autoria(p)}"
         f"<tr><td valign='top'><b>Objetivo</b></td><td>{_texto(p.objetivo)}</td></tr>"
         "</table>"
     )

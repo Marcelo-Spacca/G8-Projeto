@@ -1,27 +1,18 @@
-from datetime import datetime
-from typing import TYPE_CHECKING
-
-from sqlalchemy import ForeignKey, Text, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from repository.database import Base
-
-if TYPE_CHECKING:
-    from repository.models.fonte import Fonte
-    from repository.models.pesquisa import Pesquisa
+from repository.models.base import Modelo, agora
 
 
-class Interacao(Base):
-    __tablename__ = "interacao"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    ferramenta_ia: Mapped[str]
-    pergunta: Mapped[str] = mapped_column(Text)
-    resposta: Mapped[str] = mapped_column(Text)
-    data_registro: Mapped[datetime] = mapped_column(server_default=func.now())
-    pesquisa_id: Mapped[int] = mapped_column(ForeignKey("pesquisa.id", ondelete="CASCADE"))
-
-    pesquisa: Mapped["Pesquisa"] = relationship(back_populates="interacoes")
-    fontes: Mapped[list["Fonte"]] = relationship(
-        back_populates="interacao", cascade="all, delete-orphan"
-    )
+class Interacao(Modelo):
+    COLECAO = "interacoes"
+    CAMPOS = {
+        "ferramenta_ia": None,
+        "pergunta": None,
+        "resposta": None,
+        "data_registro": agora,
+        # Revisão do professor: o comentário só ele escreve; o aluno só lê. Interação confirmada
+        # fica fechada: o aluno não altera mais (precisa criar uma nova).
+        "comentario_professor": None,
+        "data_comentario": None,
+        "confirmada": False,
+        "pesquisa_id": None,
+    }
+    RELACOES = {"pesquisa": None, "fontes": list}

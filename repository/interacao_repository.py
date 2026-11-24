@@ -1,52 +1,52 @@
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-
-from repository.database import Session
-from repository.models import Fonte, Interacao
+from repository import armazenamento
+from repository.armazenamento import agora
+from repository.carga import carregar_interacoes
+from repository.cascata import apagar_interacoes
+from repository.models import Interacao
 
 
 class InteracaoRepository:
     def salvar(self, interacao):
-        with Session() as s:
-            s.add(interacao)
-            s.commit()
+        loja = armazenamento.loja()
+        interacao.id = loja.novo_id()
+        loja.criar("interacoes", interacao.id, interacao.para_dict())
         return interacao
 
     def listar_por_pesquisa(self, pesquisa_id):
-        """Interações da pesquisa, em ordem de registro."""
-        with Session() as s:
-            consulta = (
-                select(Interacao)
-                .where(Interacao.pesquisa_id == pesquisa_id)
-                .options(selectinload(Interacao.fontes))  # a tela mostra "2 fontes, 1 pendente"
-                .order_by(Interacao.data_registro, Interacao.id)
-            )
-            return list(s.scalars(consulta))
+        """Interações da pesquisa, em ordem de registro, com as fontes (a tela mostra
+        "2 fontes, 1 pendente")."""
+        docs = armazenamento.loja().consultar("interacoes", pesquisa_id=pesquisa_id)
+        from repository.carga import chave_id
+
+        return sorted(carregar_interacoes(docs, fontes=True), key=lambda i: (i.data_registro, chave_id(i)))
 
     def buscar_por_id(self, interacao_id):
         """Interação já com as fontes e os trechos de cada fonte (para a tela da interação)."""
-        with Session() as s:
-            consulta = (
-                select(Interacao)
-                .where(Interacao.id == interacao_id)
-                .options(selectinload(Interacao.fontes).selectinload(Fonte.trechos))
-            )
-            return s.scalars(consulta).first()
+        doc = armazenamento.loja().obter("interacoes", interacao_id)
+        return carregar_interacoes([doc], fontes=True, trechos=True)[0] if doc else None
 
     def atualizar(self, interacao_id, ferramenta_ia, pergunta, resposta):
         """RF13: muda só os textos; as fontes ligadas continuam as mesmas."""
-        with Session() as s:
-            interacao = s.get(Interacao, interacao_id)
-            interacao.ferramenta_ia = ferramenta_ia
-            interacao.pergunta = pergunta
-            interacao.resposta = resposta
-            s.commit()
-            return interacao
+        loja = armazenamento.loja()
+        loja.atualizar(
+            "interacoes", interacao_id, {"ferramenta_ia": ferramenta_ia, "pergunta": pergunta, "resposta": resposta}
+        )
+        return Interacao.de_dict(loja.obter("interacoes", interacao_id))
+
+    def registrar_comentario(self, interacao_id, comentario):
+        """Comentário do professor (vazio apaga o comentário)."""
+        armazenamento.loja().atualizar(
+            "interacoes",
+            interacao_id,
+            {"comentario_professor": comentario, "data_comentario": agora() if comentario else None},
+        )
+
+    def definir_confirmada(self, interacao_id, confirmada):
+        armazenamento.loja().atualizar("interacoes", interacao_id, {"confirmada": confirmada})
 
     def excluir(self, interacao_id):
-        """RF14: o cascade do model apaga junto as fontes e os trechos."""
-        with Session() as s:
-            interacao = s.get(Interacao, interacao_id)
-            if interacao is not None:
-                s.delete(interacao)
-                s.commit()
+        """RF14: apaga junto as fontes e os trechos."""
+        loja = armazenamento.loja()
+        lote = loja.lote()
+        apagar_interacoes(loja, lote, [interacao_id])
+        lote.confirmar()

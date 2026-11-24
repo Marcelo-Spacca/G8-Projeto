@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// O programa acessa o Firestore pela conta de serviço (biblioteca de servidor), que ignora estas
+// regras. Elas existem para o caminho contrário: bloquear qualquer acesso direto de fora (site,
+// aplicativo, alguém que descubra o id do projeto). Ou seja: ninguém lê nem grava por aqui.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

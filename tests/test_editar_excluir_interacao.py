@@ -1,14 +1,14 @@
 import pytest
-from sqlalchemy import func, select, text
 
-from repository.database import Session
 from repository.models import Fonte, Interacao, Trecho
 from services.erros import RegraViolada
+from tests.apoio import contar as contar_colecao, definir_status_das_pesquisas
+
+NOMES = {"Fonte": "fontes", "Interacao": "interacoes", "Trecho": "trechos"}
 
 
 def contar(modelo):
-    with Session() as s:
-        return s.scalar(select(func.count()).select_from(modelo))
+    return contar_colecao(modelo if isinstance(modelo, str) else modelo.COLECAO)
 
 
 @pytest.fixture
@@ -84,9 +84,7 @@ def test_excluir_nao_afeta_outras_interacoes(interacoes, fontes, interacao_com_f
 
 
 def test_pesquisa_concluida_nao_permite_editar_nem_excluir(interacoes, interacao_com_fontes):
-    with Session() as s:  # simula a conclusão (o RF10 ainda não existe)
-        s.execute(text("UPDATE pesquisa SET status = 'concluida'"))
-        s.commit()
+    definir_status_das_pesquisas("concluida")  # simula a conclusão (o RF10 ainda não existe)
     with pytest.raises(RegraViolada, match="concluída"):
         interacoes.editar(interacao_com_fontes.id, "X", "q", "r")
     with pytest.raises(RegraViolada, match="concluída"):

@@ -8,3 +8,10 @@ __pycache__/
 # gerados pelo PyInstaller
 dist/
 build/
+
+# credenciais do Firebase: NUNCA subir para o git (dão acesso total ao banco)
+firebase-*.json
+*-firebase-adminsdk-*.json
+*chave*.json
+serviceAccount*.json
+credenciais/

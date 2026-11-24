@@ -1,7 +1,7 @@
 from repository.fonte_repository import FonteRepository
 from repository.models import Fonte, Trecho
 from services.erros import RegraViolada
-from services.interacao_service import InteracaoService, exigir_pesquisa_aberta
+from services.interacao_service import InteracaoService, exigir_interacao_aberta, exigir_pesquisa_aberta
 
 RESULTADOS = ("nao_verificada", "verificada", "incorreta")  # RF17: o status pode ir de um a outro
 
@@ -35,6 +35,7 @@ class FonteService:
         """RF15/RF16: registra uma fonte citada pela IA numa interação. Ela nasce 'nao_verificada'."""
         interacao = self.interacoes.obter(interacao_id)
         exigir_pesquisa_aberta(self.interacoes.pesquisas.obter(interacao.pesquisa_id))
+        exigir_interacao_aberta(interacao)
         referencia = _limpar(referencia)
         if referencia is None:
             raise RegraViolada("Informe a referência da fonte.")
@@ -55,12 +56,30 @@ class FonteService:
         return fonte
 
     def _obter_editavel(self, fonte_id):
-        """A fonte do aluno logado, em uma pesquisa que ainda não foi concluída.
-        Depois de concluída a pesquisa vira o que foi entregue ao professor e não muda mais."""
+        """A fonte do aluno logado, em pesquisa que está com ele e em interação ainda não
+        confirmada pelo professor. Entregue ou confirmada, a fonte não muda mais para o aluno."""
         fonte = self.obter(fonte_id)
         interacao = self.interacoes.obter(fonte.interacao_id)
         exigir_pesquisa_aberta(self.interacoes.pesquisas.obter(interacao.pesquisa_id))
+        exigir_interacao_aberta(interacao)
         return fonte
+
+    def editar(self, fonte_id, referencia, link=None):
+        """O aluno corrige a referência e o link de uma fonte.
+
+        Se o texto realmente mudou e a fonte já estava verificada ou marcada como incorreta, a
+        verificação antiga deixa de valer: ela volta a 'não verificada' e perde anotação e trechos,
+        para o aluno conferir a fonte corrigida de novo."""
+        fonte = self._obter_editavel(fonte_id)
+        referencia = _limpar(referencia)
+        if referencia is None:
+            raise RegraViolada("Informe a referência da fonte.")
+        link = _limpar(link)
+        mudou = referencia != fonte.referencia or link != fonte.link
+        zerar = mudou and fonte.status != "nao_verificada"
+        if mudou:
+            self.repo.atualizar(fonte.id, referencia, link, zerar)
+        return self.obter(fonte.id)
 
     def listar(self, interacao_id):
         """RF19: as fontes de uma interação, na ordem em que foram cadastradas, com status e trechos."""

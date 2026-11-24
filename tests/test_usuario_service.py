@@ -1,8 +1,5 @@
 import pytest
-from sqlalchemy import select
-
-from repository.database import Session
-from repository.models import Usuario
+from tests.apoio import todos
 from services.erros import RegraViolada
 from services.sessao import sessao
 
@@ -12,8 +9,7 @@ def test_cadastro_guarda_hash_e_normaliza_email(usuarios):
     u = usuarios.cadastrar("  Ana  ", "  ANA@X.com ", "segredo1", "aluno")
     assert u.id and u.nome == "Ana" and u.email == "ana@x.com" and u.tipo == "aluno"
     assert "segredo1" not in u.senha_hash
-    with Session() as s:
-        assert s.scalar(select(Usuario.senha_hash)) == u.senha_hash
+    assert [d["senha_hash"] for d in todos("usuarios")] == [u.senha_hash]
 
 
 @pytest.mark.parametrize(

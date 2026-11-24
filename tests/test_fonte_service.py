@@ -163,16 +163,85 @@ def test_so_o_dono_lista_as_fontes_da_interacao(fontes, usuarios, entrar_como, i
         fontes.listar(interacao.id)
 
 
-# ---------------------------------------------------------------- pesquisa concluída é o que foi entregue: não muda mais
-def test_pesquisa_concluida_trava_fontes(fontes, pesquisas, interacoes, interacao):
+# ---------------------------------------------------------------- pesquisa entregue é o que o professor revisa: não muda
+def test_pesquisa_entregue_trava_fontes(fontes, pesquisas, interacoes, interacao):
     f = fontes.adicionar(interacao.id, "Silva (2023)")
     fontes.verificar(f.id, "verificada", trecho="meu texto")
-    pesquisas.concluir(interacao.pesquisa_id)
-    with pytest.raises(RegraViolada, match="concluída"):
+    pesquisas.entregar(interacao.pesquisa_id)
+    with pytest.raises(RegraViolada, match="entregue ao professor"):
         fontes.adicionar(interacao.id, "Nova")
-    with pytest.raises(RegraViolada, match="concluída"):
+    with pytest.raises(RegraViolada, match="entregue ao professor"):
         fontes.verificar(f.id, "incorreta")
-    with pytest.raises(RegraViolada, match="concluída"):
+    with pytest.raises(RegraViolada, match="entregue ao professor"):
         fontes.ligar_trecho(f.id, "outro")
     ainda = fontes.obter(f.id)
     assert ainda.status == "verificada" and [t.trecho_citado for t in ainda.trechos] == ["meu texto"]
+
+
+# ---------------------------------------------------------------- editar referência e link
+def test_editar_corrige_referencia_e_link(fontes, interacao):
+    f = fontes.adicionar(interacao.id, "Silva 2023", "http://velho.com")
+    e = fontes.editar(f.id, "  SILVA, J. A educação na era da IA. 2023.  ", "  https://novo.com/artigo ")
+    assert e.referencia == "SILVA, J. A educação na era da IA. 2023."
+    assert e.link == "https://novo.com/artigo" and e.status == "nao_verificada"
+
+
+def test_editar_pode_apagar_o_link(fontes, interacao):
+    f = fontes.adicionar(interacao.id, "Silva 2023", "http://velho.com")
+    assert fontes.editar(f.id, "Silva 2023", "   ").link is None
+
+
+def test_editar_exige_referencia(fontes, interacao):
+    f = fontes.adicionar(interacao.id, "Silva 2023")
+    with pytest.raises(RegraViolada, match="referência"):
+        fontes.editar(f.id, "  ", "http://x.com")
+    assert fontes.obter(f.id).referencia == "Silva 2023"
+
+
+def test_editar_fonte_verificada_zera_a_verificacao_e_os_trechos(fontes, interacao):
+    f = fontes.adicionar(interacao.id, "Silva 2023")
+    fontes.verificar(f.id, "verificada", "achei no site", "meu trecho", "§1")
+    e = fontes.editar(f.id, "Silva 2024", None)
+    assert e.status == "nao_verificada" and e.data_verificacao is None and e.anotacao_correcao is None
+    assert e.trechos == [] and e.julgada_pelo_professor is False
+
+
+def test_editar_fonte_incorreta_tambem_volta_a_nao_verificada(fontes, interacao):
+    f = fontes.adicionar(interacao.id, "Livro inventado")
+    fontes.verificar(f.id, "incorreta", "não existe")
+    assert fontes.editar(f.id, "Livro real", None).status == "nao_verificada"
+
+
+def test_editar_sem_mudar_nada_preserva_a_verificacao(fontes, interacao):
+    f = fontes.adicionar(interacao.id, "Silva 2023", "http://x.com")
+    fontes.verificar(f.id, "verificada", "ok", "trecho")
+    e = fontes.editar(f.id, " Silva 2023 ", "http://x.com ")
+    assert e.status == "verificada" and len(e.trechos) == 1 and e.anotacao_correcao == "ok"
+
+
+def test_so_o_link_mudando_tambem_exige_nova_verificacao(fontes, interacao):
+    f = fontes.adicionar(interacao.id, "Silva 2023", "http://x.com")
+    fontes.verificar(f.id, "verificada")
+    assert fontes.editar(f.id, "Silva 2023", "http://y.com").status == "nao_verificada"
+
+
+def test_nao_edita_fonte_de_pesquisa_entregue_nem_de_interacao_confirmada(fontes, interacoes, pesquisas, revisoes, entrar_como, interacao):
+    f = fontes.adicionar(interacao.id, "Silva 2023")
+    pesquisas.entregar(interacao.pesquisa_id)
+    with pytest.raises(RegraViolada, match="entregue ao professor"):
+        fontes.editar(f.id, "Outra", None)
+    entrar_como("prof@x.com", tipo="professor", nome="Prof")
+    revisoes.julgar_fonte(f.id, "verificada")
+    revisoes.confirmar_interacao(interacao.id)
+    revisoes.devolver(interacao.pesquisa_id, "ajuste")
+    entrar_como("ana@x.com")
+    with pytest.raises(RegraViolada, match="confirmada pelo professor"):
+        fontes.editar(f.id, "Outra", None)
+
+
+def test_aluno_nao_edita_fonte_de_outro_aluno(fontes, interacao, usuarios, entrar_como):
+    f = fontes.adicionar(interacao.id, "Silva 2023")
+    usuarios.sair()
+    entrar_como("bia@x.com", nome="Bia")
+    with pytest.raises(RegraViolada, match="Fonte não encontrada"):
+        fontes.editar(f.id, "Hackeada", None)

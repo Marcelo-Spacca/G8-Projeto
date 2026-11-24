@@ -25,7 +25,12 @@ class RelatorioGerado:
 
     @property
     def entregue(self):
-        """True depois que o aluno conclui a pesquisa (RF10). Antes disso é só uma prévia."""
+        """True depois que o aluno entrega a pesquisa ao professor (RF10). Antes é só uma prévia."""
+        return self.pesquisa.status in ("entregue", "concluida")
+
+    @property
+    def concluida(self):
+        """True depois que o professor aceita a pesquisa."""
         return self.pesquisa.status == "concluida"
 
     @property
@@ -45,32 +50,26 @@ class RelatorioService:
         self.repo = RelatorioRepository()
         self.pesquisas = PesquisaRepository()
 
-    def listar_entregues(self):
-        """RF23/RF03: área do professor. Só as pesquisas já concluídas (entregues), com o aluno,
-        as interações e as fontes carregados. Pesquisa em andamento o professor não enxerga."""
-        exigir_professor()
-        return self.pesquisas.listar_concluidas()
-
-    def contagem_fontes(self, pesquisa):
-        """Resumo de fontes de uma pesquisa já carregada (por exemplo, as de listar_entregues)."""
-        return contar_status(f for i in pesquisa.interacoes for f in i.fontes)
-
     def gerar(self, pesquisa_id):
         """RF20/RF21/RF28: monta o relatório só com o que já foi registrado, sem digitação extra:
         interações, fontes, status, anotações e o trecho em que cada fonte foi usada.
         RF22: o relatório é sempre o único ligado a esta pesquisa.
 
         RF03: o aluno vê o relatório (ou a prévia dele) só das próprias pesquisas; o professor vê
-        apenas as pesquisas já entregues. Qualquer outro caso é tratado como inexistente.
+        apenas as pesquisas já entregues das turmas dele (o relatório de pesquisa em andamento fica bloqueado). Qualquer outro caso é tratado como inexistente.
         """
         if not sessao.logado:
             raise RegraViolada("Entre na sua conta para continuar.")
         pesquisa = self.repo.dados_da_pesquisa(pesquisa_id)
         usuario = sessao.usuario
         if usuario.tipo == "professor":
-            visivel = pesquisa is not None and pesquisa.status == "concluida"
-        else:
-            visivel = pesquisa is not None and pesquisa.aluno_id == usuario.id
+            visivel = (
+                pesquisa is not None
+                and pesquisa.status in ("entregue", "concluida")
+                and self.pesquisas.professor_da_pesquisa(pesquisa.id) == usuario.id
+            )
+        else:  # a própria pesquisa ou a de um grupo de que o aluno faz parte
+            visivel = pesquisa is not None and self.pesquisas.aluno_acessa(pesquisa.id, usuario.id)
         if not visivel:
             raise RegraViolada("Pesquisa não encontrada.")
         relatorio = self.repo.garantir(pesquisa.id)

@@ -19,13 +19,26 @@ def _sair_e_entrar(usuarios, entrar_como, email, tipo="aluno", nome="Outro"):
     entrar_como(email, tipo=tipo, nome=nome)
 
 
-def test_aluno_nao_acessa_nada_da_area_do_professor(relatorios, usuarios, entrar_como, tudo_da_ana):
-    p, _, _ = tudo_da_ana
-    with pytest.raises(RegraViolada, match="professores"):
-        relatorios.listar_entregues()
+def test_aluno_nao_acessa_nada_da_area_do_professor(relatorios, revisoes, usuarios, entrar_como, tudo_da_ana):
+    p, i, f = tudo_da_ana
+    chamadas = (
+        lambda: revisoes.listar_todas(),
+        lambda: revisoes.obter_pesquisa(p.id),
+        lambda: revisoes.obter_interacao(i.id),
+        lambda: revisoes.julgar_fonte(f.id, "verificada"),
+        lambda: revisoes.comentar_interacao(i.id, "oi"),
+        lambda: revisoes.confirmar_interacao(i.id),
+        lambda: revisoes.reabrir_interacao(i.id),
+        lambda: revisoes.aceitar(p.id),
+        lambda: revisoes.devolver(p.id, "x"),
+    )
+    for chamada in chamadas:  # a própria dona
+        with pytest.raises(RegraViolada, match="professores"):
+            chamada()
     _sair_e_entrar(usuarios, entrar_como, "bia@x.com", nome="Bia")
-    with pytest.raises(RegraViolada, match="professores"):
-        relatorios.listar_entregues()
+    for chamada in chamadas:  # outro aluno
+        with pytest.raises(RegraViolada, match="professores"):
+            chamada()
     # e o relatório de outro aluno também não, mesmo sabendo o número
     with pytest.raises(RegraViolada, match="não encontrada"):
         relatorios.gerar(p.id)
@@ -38,7 +51,7 @@ def test_aluno_nao_ve_pesquisa_interacao_nem_fonte_de_outro(pesquisas, interacoe
     for chamada in (
         lambda: pesquisas.obter(p.id),
         lambda: pesquisas.editar(p.id, "x", "y"),
-        lambda: pesquisas.concluir(p.id),
+        lambda: pesquisas.entregar(p.id),
         lambda: interacoes.listar(p.id),
         lambda: interacoes.obter(i.id),
         lambda: interacoes.editar(i.id, "x", "q", "r"),
@@ -58,7 +71,7 @@ def test_professor_nao_usa_as_funcoes_do_aluno(pesquisas, interacoes, fontes, us
         lambda: pesquisas.criar("T", "O"),
         lambda: pesquisas.listar_minhas(),
         lambda: pesquisas.obter(p.id),
-        lambda: pesquisas.concluir(p.id),
+        lambda: pesquisas.entregar(p.id),
         lambda: interacoes.registrar(p.id, "X", "q", "r"),
         lambda: interacoes.listar(p.id),
         lambda: fontes.adicionar(i.id, "x"),
@@ -68,16 +81,17 @@ def test_professor_nao_usa_as_funcoes_do_aluno(pesquisas, interacoes, fontes, us
             chamada()
 
 
-def test_sem_login_nada_funciona(pesquisas, interacoes, fontes, relatorios, usuarios, tudo_da_ana):
+def test_sem_login_nada_funciona(pesquisas, interacoes, fontes, relatorios, revisoes, usuarios, tudo_da_ana):
     p, i, f = tudo_da_ana
     usuarios.sair()
     for chamada in (
         lambda: pesquisas.listar_minhas(),
-        lambda: pesquisas.concluir(p.id),
+        lambda: pesquisas.entregar(p.id),
         lambda: interacoes.listar(p.id),
         lambda: fontes.listar(i.id),
         lambda: relatorios.gerar(p.id),
-        lambda: relatorios.listar_entregues(),
+        lambda: revisoes.listar_todas(),
+        lambda: revisoes.aceitar(p.id),
     ):
         with pytest.raises(RegraViolada, match="Entre"):
             chamada()

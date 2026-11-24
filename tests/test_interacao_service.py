@@ -1,7 +1,5 @@
 import pytest
-from sqlalchemy import text
-
-from repository.database import Session
+from tests.apoio import definir_status_das_pesquisas
 from services.erros import RegraViolada
 
 
@@ -45,9 +43,7 @@ def test_nao_registra_em_pesquisa_de_outro_aluno_nem_inexistente(interacoes, pes
 def test_pesquisa_concluida_nao_aceita_interacao(interacoes, pesquisas, entrar_como):
     entrar_como()
     p = pesquisas.criar("T", "O")
-    with Session() as s:  # simula a conclusão (o RF10 ainda não existe)
-        s.execute(text("UPDATE pesquisa SET status = 'concluida' WHERE id = :i"), {"i": p.id})
-        s.commit()
+    definir_status_das_pesquisas("concluida", p.id)  # simula a conclusão (o RF10 ainda não existe)
     with pytest.raises(RegraViolada, match="concluída"):
         interacoes.registrar(p.id, "X", "q", "r")
 

@@ -70,12 +70,9 @@ def test_obter_pesquisa_de_outro_aluno_e_como_inexistente(pesquisas, usuarios, e
 # ---------------------------------------------------------------- RF08
 def _concluir(pesquisa_id):
     """Ainda não existe o service de conclusão (RF10): marca direto no banco."""
-    from repository.database import Session
-    from repository.models import Pesquisa
+    from tests.apoio import definir_status_das_pesquisas
 
-    with Session() as s:
-        s.get(Pesquisa, pesquisa_id).status = "concluida"
-        s.commit()
+    definir_status_das_pesquisas("concluida", pesquisa_id)
 
 
 def test_editar_pesquisa_salva_a_alteracao(pesquisas, entrar_como):
@@ -132,10 +129,7 @@ def test_editar_pesquisa_exige_aluno_logado(pesquisas, entrar_como):
 
 # ---------------------------------------------------------------- RF09
 def test_excluir_pesquisa_em_andamento_leva_tudo_junto(pesquisas, interacoes, fontes, entrar_como):
-    from sqlalchemy import func, select
-
-    from repository.database import Session
-    from repository.models import Fonte, Interacao, Relatorio, Trecho
+    from tests.apoio import contar
 
     entrar_como()
     p = pesquisas.criar("Tema", "Obj")
@@ -147,20 +141,19 @@ def test_excluir_pesquisa_em_andamento_leva_tudo_junto(pesquisas, interacoes, fo
     assert [x.titulo for x in pesquisas.listar_minhas()] == ["Fica"]
     with pytest.raises(RegraViolada, match="não encontrada"):
         pesquisas.obter(p.id)
-    with Session() as s:
-        for modelo in (Interacao, Fonte, Trecho):
-            assert s.scalar(select(func.count()).select_from(modelo)) == 0
-        assert s.scalar(select(func.count()).select_from(Relatorio)) == 1  # só o da pesquisa que ficou
+    for colecao in ("interacoes", "fontes", "trechos"):
+        assert contar(colecao) == 0
+    assert contar("relatorios") == 1  # só o da pesquisa que ficou
     assert pesquisas.obter(outra.id).titulo == "Fica"
 
 
-def test_pesquisa_concluida_nao_pode_ser_excluida(pesquisas, entrar_como):
+def test_pesquisa_entregue_nao_pode_ser_excluida(pesquisas, entrar_como):
     entrar_como()
     p = pesquisas.criar("Tema", "Obj")
-    pesquisas.concluir(p.id)
+    pesquisas.entregar(p.id)
     with pytest.raises(RegraViolada, match="não pode ser excluída"):
         pesquisas.excluir(p.id)
-    assert pesquisas.obter(p.id).status == "concluida"
+    assert pesquisas.obter(p.id).status == "entregue"
 
 
 def test_excluir_pesquisa_exige_ser_o_aluno_dono(pesquisas, usuarios, entrar_como):
@@ -181,40 +174,42 @@ def test_excluir_pesquisa_exige_ser_o_aluno_dono(pesquisas, usuarios, entrar_com
     assert pesquisas.obter(p.id).titulo == "Da Ana"
 
 
-# ---------------------------------------------------------------- RF10
-def test_concluir_pesquisa_muda_status_e_gera_o_relatorio(pesquisas, relatorios, entrar_como):
+# ---------------------------------------------------------------- RF10: entregar ao professor
+def test_aluno_entrega_a_pesquisa_ao_professor(pesquisas, relatorios, entrar_como):
     entrar_como()
     p = pesquisas.criar("Tema", "Obj")
-    antes = relatorios.gerar(p.id).relatorio.data_geracao
-    concluida = pesquisas.concluir(p.id)
-    assert concluida.status == "concluida" and concluida.data_conclusao is not None
-    # a conclusão fica gravada no banco e o relatório foi gerado agora, junto dela
-    assert pesquisas.obter(p.id).status == "concluida"
-    r = relatorios.gerar(p.id)
-    assert r.entregue and r.relatorio.data_geracao >= antes
+    entregue = pesquisas.entregar(p.id)
+    assert entregue.status == "entregue" and entregue.data_entrega is not None
+    assert entregue.data_conclusao is None  # concluir é do professor
+    assert pesquisas.obter(p.id).status == "entregue"
+    assert relatorios.gerar(p.id).entregue is True
 
 
-def test_pesquisa_concluida_nao_pode_ser_concluida_de_novo_nem_editada(pesquisas, entrar_como):
+def test_aluno_nao_tem_como_concluir_a_pesquisa(pesquisas):
+    assert not hasattr(pesquisas, "concluir")
+
+
+def test_pesquisa_entregue_nao_pode_ser_entregue_de_novo_nem_editada(pesquisas, entrar_como):
     entrar_como()
     p = pesquisas.criar("Tema", "Obj")
-    pesquisas.concluir(p.id)
-    with pytest.raises(RegraViolada, match="já foi concluída"):
-        pesquisas.concluir(p.id)
-    with pytest.raises(RegraViolada, match="concluída"):
+    pesquisas.entregar(p.id)
+    with pytest.raises(RegraViolada, match="já foi entregue"):
+        pesquisas.entregar(p.id)
+    with pytest.raises(RegraViolada, match="entregue ao professor"):
         pesquisas.editar(p.id, "Outro", "Outro")
 
 
-def test_concluir_exige_ser_o_aluno_dono(pesquisas, usuarios, entrar_como):
+def test_entregar_exige_ser_o_aluno_dono(pesquisas, usuarios, entrar_como):
     entrar_como("a@x.com")
     p = pesquisas.criar("Da Ana", "O")
     usuarios.sair()
     with pytest.raises(RegraViolada, match="Entre"):
-        pesquisas.concluir(p.id)
+        pesquisas.entregar(p.id)
     entrar_como("b@x.com", nome="Bia")
     with pytest.raises(RegraViolada, match="não encontrada"):
-        pesquisas.concluir(p.id)
+        pesquisas.entregar(p.id)
     usuarios.sair()
     entrar_como("p@x.com", tipo="professor", nome="Prof")
     with pytest.raises(RegraViolada, match="alunos"):
-        pesquisas.concluir(p.id)
+        pesquisas.entregar(p.id)
     assert pesquisas.repo.buscar_por_id(p.id).status == "em_andamento"
