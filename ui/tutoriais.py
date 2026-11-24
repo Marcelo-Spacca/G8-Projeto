@@ -1,0 +1,238 @@
+"""Textos dos tutoriais (o botão "? Tutorial" de cada tela).
+
+Cada tutorial tem um título, uma frase de abertura e seções com tópicos curtos. Só texto:
+quem quiser mudar uma explicação mexe aqui, sem tocar nas telas.
+"""
+
+TUTORIAIS = {
+    # ------------------------------------------------------------------ aluno
+    "aluno_turmas": {
+        "titulo": "Como usar “Minhas turmas”",
+        "abertura": (
+            "Uma turma é uma cadeira criada pelo seu professor. Você precisa entrar em uma turma "
+            "para criar pesquisas nela."
+        ),
+        "secoes": [
+            ("Entrando em uma turma", [
+                "Peça ao professor o código da turma (6 letras e números).",
+                "Clique em “Entrar em uma turma”, digite o código e confirme. Maiúsculas e minúsculas não importam.",
+                "Você pode estar em várias turmas, uma para cada cadeira.",
+            ]),
+            ("Depois de entrar", [
+                "Clique na turma para ver as suas pesquisas dentro dela.",
+                "O selo mostra se o professor permite grupos naquela turma.",
+            ]),
+        ],
+    },
+    "aluno_pesquisas": {
+        "titulo": "Como usar a turma",
+        "abertura": (
+            "Aqui ficam as suas pesquisas da cadeira. Uma pesquisa é um trabalho em que você usou "
+            "inteligência artificial: você registra cada conversa com a IA, confere as fontes que ela "
+            "citou e, no fim, entrega tudo ao professor."
+        ),
+        "secoes": [
+            ("Individuais e Grupos", [
+                "Na aba “Individuais” ficam as pesquisas que são só suas. Use “Nova pesquisa” para criar uma.",
+                "Na aba “Grupos” ficam as pesquisas feitas em grupo: todos os integrantes trabalham na mesma pesquisa. “Criar grupo” só existe nesta aba.",
+                "Se o professor não habilitou grupos nesta turma, a aba “Grupos” e o botão “Convites” ficam cinza.",
+            ]),
+            ("Criando um grupo", [
+                "Dê um nome ao grupo e defina o título e o objetivo da pesquisa.",
+                "Marque os colegas da turma que quer convidar. Quando o primeiro aceitar, a pesquisa do grupo é criada.",
+                "Convites que você recebe aparecem no botão “Convites”: aceite para entrar no grupo ou recuse.",
+                "Depois que a pesquisa do grupo é entregue ao professor, os integrantes não mudam mais, a não ser que ele a devolva.",
+            ]),
+            ("As etapas de uma pesquisa", [
+                "Em andamento: está com você (ou com o grupo). Dá para editar, registrar interações e verificar fontes.",
+                "Entregue ao professor: ele está revisando. Nada pode ser alterado até ele responder.",
+                "Devolvida para ajustes: o professor pediu mudanças. Leia a mensagem dele, ajuste e entregue de novo.",
+                "Concluída: o professor aceitou. A pesquisa e o relatório ficam guardados, sem mais alterações.",
+            ]),
+            ("Vale saber", [
+                "Pesquisas individuais em andamento podem ser excluídas. Pesquisas de grupo não são excluídas pelos alunos.",
+                "Cada pesquisa gera um relatório sozinho; você não precisa escrevê-lo.",
+            ]),
+        ],
+    },
+    "aluno_pesquisa": {
+        "titulo": "Como usar a tela da pesquisa",
+        "abertura": (
+            "Aqui ficam as interações da pesquisa. Uma interação é uma conversa com uma IA: "
+            "a ferramenta usada, a sua pergunta e a resposta que ela deu."
+        ),
+        "secoes": [
+            ("Como registrar uma interação corretamente", [
+                "Escreva a ferramenta (ChatGPT, Claude, Gemini...) exatamente como você a usou.",
+                "Copie a pergunta e a resposta completas, sem resumir nem corrigir. O professor precisa ver o que a IA realmente disse.",
+                "Uma conversa = uma interação. Se mudou de assunto ou de ferramenta, crie outra.",
+                "Depois de salvar, cadastre as fontes que a IA citou.",
+            ]),
+            ("Entregar para o professor", [
+                "Quando terminar, use “Entregar para o professor”. Confira antes a prévia do relatório.",
+                "Fontes ainda não verificadas não impedem a entrega, mas o professor vai notá-las.",
+                "Depois de entregue, você só volta a editar se o professor devolver a pesquisa.",
+            ]),
+            ("Se o professor devolver", [
+                "A mensagem dele aparece no alto desta tela. Leia o que ele pediu.",
+                "Interações comentadas ou com fontes julgadas por ele mostram isso na lista.",
+                "Interações que o professor confirmou estão fechadas: se precisar mudar algo nelas, crie uma nova interação.",
+            ]),
+        ],
+    },
+    "aluno_interacao": {
+        "titulo": "Como verificar as fontes",
+        "abertura": (
+            "A IA costuma citar livros, artigos e sites, e às vezes inventa referências que parecem reais. "
+            "Por isso cada fonte precisa ser conferida por você, fora da IA."
+        ),
+        "secoes": [
+            ("Passo a passo", [
+                "Clique em “Adicionar fonte” e copie a referência que a IA citou (e o link, se houver). Ela entra como “Não verificada”.",
+                "Procure a fonte por conta própria: em uma biblioteca, no Google Acadêmico ou no site do autor.",
+                "Clique em “Verificar” e escolha o resultado: verificada, incorreta/inventada ou ainda não verificada.",
+                "Anote o que encontrou. Se a fonte é incorreta, explique o que está errado.",
+                "Copiou a referência ou o link errado? Use “Editar fonte”. Se ela já tinha sido conferida, volta a “Não verificada” para você conferir de novo.",
+            ]),
+            ("Ligando a fonte ao seu texto", [
+                "Fonte verificada pode ser ligada ao trecho do seu trabalho em que você a usou.",
+                "O trecho aparece no relatório ao lado da fonte, para o professor ver onde ela foi usada.",
+                "Se você mudar uma fonte para incorreta ou não verificada, os trechos ligados a ela são removidos.",
+            ]),
+            ("O que o professor faz", [
+                "Ele também pode julgar fontes, inclusive desfazer uma verificação sua. Fontes julgadas por ele ganham um selo.",
+                "Ele pode deixar um comentário na interação. Você só lê; não responde por aqui.",
+                "Interação confirmada pelo professor fica fechada. Para ajustar algo nela, crie uma nova interação.",
+            ]),
+        ],
+    },
+    "relatorio_aluno": {
+        "titulo": "Como ler o relatório",
+        "abertura": "O relatório é montado sozinho com o que você registrou. É isto que o professor lê.",
+        "secoes": [
+            ("O que aparece", [
+                "O resumo no topo: quantas interações, quantas fontes e o resultado das verificações.",
+                "Cada interação, com a pergunta, a resposta e uma tabela de fontes.",
+                "Para cada fonte: o status, a anotação e o trecho do seu texto em que ela foi usada.",
+                "Os comentários do professor, depois que ele revisar.",
+            ]),
+            ("Antes de entregar", [
+                "Enquanto a pesquisa está em andamento, isto é só uma prévia: confira se está tudo certo.",
+                "Use “Salvar como PDF” se quiser guardar uma cópia.",
+            ]),
+        ],
+    },
+    # ------------------------------------------------------------------ professor
+    "prof_turmas": {
+        "titulo": "Como usar “Minhas turmas”",
+        "abertura": (
+            "Cada turma é uma cadeira sua. Os alunos entram com um código e criam as pesquisas dentro da turma."
+        ),
+        "secoes": [
+            ("Criando uma turma", [
+                "Clique em “Nova turma”, dê o nome da cadeira e escolha se os alunos podem criar grupos. Essa escolha vale para a turma toda.",
+                "O sistema gera o código de entrada. Use “Copiar código” e passe-o aos alunos.",
+            ]),
+            ("Na lista", [
+                "Cada turma mostra quantos alunos e pesquisas tem e quantas aguardam a sua revisão.",
+                "Clique na turma para ver os alunos, as pesquisas de cada um e os grupos.",
+                "“Excluir” apaga a turma com tudo o que há nela (pesquisas, interações, fontes, grupos). O código deixa de valer. Não dá para desfazer.",
+                "“Pesquisas de todas as turmas” abre a lista geral, onde você filtra por turma.",
+            ]),
+        ],
+    },
+    "prof_turma": {
+        "titulo": "Como usar a tela da turma",
+        "abertura": (
+            "Aqui você vê os alunos da turma e, em vez de uma lista solta de pesquisas, cada pesquisa junto de quem a fez."
+        ),
+        "secoes": [
+            ("Aba Alunos", [
+                "Cada aluno aparece com as próprias pesquisas. Clique em uma pesquisa para acompanhar ou revisar.",
+                "Abaixo do nome aparecem os grupos de que o aluno participa, se houver.",
+            ]),
+            ("Aba Grupos", [
+                "Só funciona se você habilitou grupos ao criar a turma; do contrário a aba fica cinza.",
+                "Cada grupo mostra os integrantes e a pesquisa única do grupo.",
+                "“Remover” tira um aluno do grupo (o último integrante não pode sair). “Atribuir aluno” coloca outro aluno da turma no grupo.",
+                "Com a pesquisa do grupo entregue ou concluída, os integrantes ficam travados; se você devolver a pesquisa, voltam a poder mudar.",
+            ]),
+        ],
+    },
+    "prof_lista": {
+        "titulo": "Como usar “Pesquisas dos alunos”",
+        "abertura": (
+            "Aqui você acompanha as pesquisas das suas turmas e revisa as que foram entregues. "
+            "Use o filtro “Turma” para ver só uma cadeira."
+        ),
+        "secoes": [
+            ("Como a lista é organizada", [
+                "Aguardando sua revisão: pesquisas entregues. Comece por elas.",
+                "Em andamento: ainda estão com o aluno ou o grupo. Você acompanha o que foi registrado, mas não altera nada.",
+                "Concluídas: pesquisas que você já aceitou.",
+            ]),
+            ("Em cada pesquisa", [
+                "A caixa marcada mostra se a pesquisa foi entregue para verificação, e quando.",
+                "Pesquisas de grupo mostram “Grupo” e os integrantes no lugar do nome do aluno.",
+                "O botão “Relatório” só abre depois da entrega; antes disso ele fica desabilitado.",
+                "Clique na pesquisa para ver as interações e, se ela foi entregue, revisá-las.",
+            ]),
+        ],
+    },
+    "prof_pesquisa": {
+        "titulo": "Como revisar uma pesquisa",
+        "abertura": (
+            "Quando o aluno entrega, a revisão fica com você. Ao terminar, você aceita a pesquisa ou a devolve."
+        ),
+        "secoes": [
+            ("O que você pode fazer", [
+                "Abrir cada interação para julgar as fontes, comentar e confirmar.",
+                "Ver o relatório completo, que se monta sozinho.",
+                "Aceitar: a pesquisa fica concluída, com todas as interações fechadas.",
+                "Devolver: ela volta ao aluno como incompleta. A mensagem que você escrever explica o que ajustar e o aluno a lê no sistema.",
+            ]),
+            ("Boas práticas", [
+                "Na devolução, seja específico: diga qual interação ou fonte precisa de ajuste e por quê.",
+                "Pesquisa em andamento você só acompanha. As ações de revisão ficam disponíveis depois da entrega.",
+                "Confirme as interações que já estão boas antes de devolver: elas ficam fechadas e o aluno ajusta só o resto.",
+            ]),
+        ],
+    },
+    "prof_interacao": {
+        "titulo": "Como julgar as fontes e comentar",
+        "abertura": (
+            "Nesta tela você lê a conversa do aluno com a IA e confere cada fonte que ela citou."
+        ),
+        "secoes": [
+            ("Julgando as fontes", [
+                "“Julgar fonte” permite marcar como verificada, incorreta/inventada ou voltar para não verificada.",
+                "Você pode mudar o que o aluno marcou. A anotação que você escrever aparece para ele.",
+                "Fontes marcadas por você ganham o selo “Julgada pelo professor”.",
+            ]),
+            ("Comentários", [
+                "Deixe um comentário na interação, ela estando verificada ou não. O aluno só lê.",
+                "Um comentário vazio apaga o anterior.",
+            ]),
+            ("Confirmar a interação", [
+                "Confirme quando todas as fontes estiverem julgadas e a interação estiver correta.",
+                "Interação confirmada fica fechada: o aluno não a altera mais e, se precisar ajustar, cria uma nova.",
+                "Use “Reabrir interação” se quiser mudar algo antes de aceitar ou devolver a pesquisa.",
+            ]),
+        ],
+    },
+    "relatorio_professor": {
+        "titulo": "Como ler o relatório",
+        "abertura": "O relatório reúne tudo o que o aluno registrou, sem que ele precise escrever nada à parte.",
+        "secoes": [
+            ("Como ler", [
+                "O resumo no topo mostra quantas fontes foram verificadas, incorretas ou pendentes.",
+                "Cada interação traz a pergunta, a resposta da IA e a tabela de fontes.",
+                "Na tabela, cada fonte aparece com o status e o trecho do texto do aluno em que foi usada.",
+                "Seus comentários e as interações confirmadas aparecem junto da interação.",
+            ]),
+            ("Dica", [
+                "Use “Salvar como PDF” para guardar o relatório ou anexá-lo em outro lugar.",
+            ]),
+        ],
+    },
+}

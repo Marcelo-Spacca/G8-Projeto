@@ -1,22 +1,9 @@
-from datetime import datetime
-from typing import TYPE_CHECKING
-
-from sqlalchemy import ForeignKey, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from repository.database import Base
-
-if TYPE_CHECKING:
-    from repository.models.pesquisa import Pesquisa
+from repository.models.base import Modelo, agora
 
 
-class Relatorio(Base):
-    __tablename__ = "relatorio"
+class Relatorio(Modelo):
+    """1:1 com a pesquisa: o id do documento é o id da pesquisa."""
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    data_geracao: Mapped[datetime] = mapped_column(server_default=func.now())
-    pesquisa_id: Mapped[int] = mapped_column(
-        ForeignKey("pesquisa.id", ondelete="CASCADE"), unique=True  # 1:1 com a pesquisa
-    )
-
-    pesquisa: Mapped["Pesquisa"] = relationship(back_populates="relatorio")
+    COLECAO = "relatorios"
+    CAMPOS = {"data_geracao": agora, "pesquisa_id": None}
+    RELACOES = {"pesquisa": None}
