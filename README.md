@@ -1,6 +1,6 @@
 # Projeto 1 (SI 26.2) — Registro verificável do uso de IA
 
-Aplicação desktop em Python (interface gráfica PySide6) para o aluno registrar suas interações com IA, verificar as fontes que a IA citou, ligar cada fonte verificada a um trecho do próprio texto e entregar um relatório ao professor.
+Aplicação web (API em Python + interface em React) para o aluno registrar suas interações com IA, verificar as fontes que a IA citou, ligar cada fonte verificada a um trecho do próprio texto e entregar um relatório ao professor.
 
 ---
 
@@ -29,7 +29,7 @@ Aplicação desktop em Python (interface gráfica PySide6) para o aluno registra
 
 **Estados de uma pesquisa:** `em_andamento` (com o aluno, inclusive a devolvida) → `entregue` (com o professor) → `concluida` (aceita). Devolver faz `entregue` voltar a `em_andamento`.
 
-**Tutoriais:** todas as telas têm um botão pequeno **? Tutorial** (perto das ações) que explica para que a tela serve e como usá-la. Os textos ficam em `ui/tutoriais.py`.
+**Tutoriais:** todas as telas têm um botão pequeno **? Tutorial** (perto das ações) que explica para que a tela serve e como usá-la. Os textos ficam em `frontend/src/tutoriais.json`.
 
 **Acesso:** aluno e professor têm telas separadas. Um perfil não abre as telas do outro, nem por endereço/número direto. Um aluno só enxerga as próprias pesquisas e as do seu grupo; um professor só as das suas turmas.
 
@@ -61,21 +61,23 @@ Aplicação desktop em Python (interface gráfica PySide6) para o aluno registra
 
 | Parte | Tecnologia |
 |---|---|
-| Linguagem | Python 3.11+ |
-| Interface | PySide6 (Qt) |
+| Interface (front-end) | React 18 + TypeScript, compilado com Vite |
+| API (back-end) | Python 3.11+ com FastAPI (`api/`), servida pelo Uvicorn |
+| Regras de negócio | Python puro (`services/`) |
 | Banco de dados | Firebase (Cloud Firestore, online) |
 | Acesso ao banco | `google-cloud-firestore` (biblioteca oficial do Google) |
 | Senhas | `hashlib.scrypt` (biblioteca padrão) |
 | Configuração | arquivo `.env` (python-dotenv) |
-| Testes | pytest |
-| Empacotamento | PyInstaller |
+| Testes | pytest (regras, API e armazenamento) |
 
 ### Arquitetura em camadas
 
-O código é um monolito dividido em camadas. **Cada camada só chama a que está abaixo dela**, nunca a de cima.
+O back-end é um monolito dividido em camadas. **Cada camada só chama a que está abaixo dela**, nunca a de cima. O front-end é um aplicativo separado que só conversa com a API por HTTP/JSON.
 
 ```
-ui/           telas (PySide6)
+frontend/     telas em React (navegador)
+   ↓  HTTP/JSON
+api/          rotas FastAPI: só traduzem HTTP para chamadas de service
    ↓
 services/     regras de negócio
    ↓
@@ -84,52 +86,49 @@ repository/   classes de dados e acesso ao banco
 Firebase (Cloud Firestore, na internet)
 ```
 
-- **ui:** mostra as telas, lê o que o usuário digita e chama os services. Não tem regra de negócio nem acesso ao banco.
-- **services:** aplicam as regras (validações, permissões, hash de senha, quem pode ver o quê). Não conhecem a interface.
+- **frontend:** mostra as telas, lê o que o usuário digita e chama a API. Não tem regra de negócio: as mensagens de erro vêm prontas do servidor.
+- **api:** cada rota autentica o usuário (token), chama **um** service e devolve JSON. Não decide nada sozinha.
+- **services:** aplicam as regras (validações, permissões, hash de senha, quem pode ver o quê). Não conhecem HTTP nem interface.
 - **repository:** lê e grava no banco. Não conhece regra de negócio.
 
 ### Estrutura de pastas
 
 ```
 .
-├── main.py                  # abre o programa
-├── ui/
-│   ├── app.py               # cria a aplicação e a janela
-│   ├── janela_principal.py  # barra superior, troca de telas e guarda por perfil
-│   ├── tela_acesso.py       # entrar / criar conta
-│   ├── tela_turmas.py       # aluno: Minhas turmas e entrada por código
-│   ├── tela_pesquisas.py    # aluno: uma turma (abas Individuais | Grupos, convites)
-│   ├── tela_pesquisa.py     # detalhe da pesquisa e suas interações
-│   ├── tela_interacao.py    # interação, fontes, verificação e trechos
-│   ├── tela_relatorio.py    # relatório (prévia, entregue e PDF)
-│   ├── tela_turmas_professor.py  # professor: Minhas turmas (criar, código, excluir)
-│   ├── tela_turma_professor.py   # professor: alunos e suas pesquisas, grupos (remover/atribuir)
-│   ├── tela_professor.py    # lista de pesquisas das turmas, com filtro por turma (professor)
-│   ├── linhas.py            # linha de pesquisa das telas do professor
-│   ├── tela_revisao.py      # pesquisa de um aluno: acompanhar, aceitar ou devolver (professor)
-│   ├── tela_revisao_interacao.py  # julgar fontes, comentar e confirmar (professor)
-│   ├── cartao_fonte.py      # cartão de fonte usado pelas telas do aluno e do professor
-│   ├── dialogos.py          # formulários, verificação de fonte e tutorial
-│   ├── tutoriais.py         # textos dos botões "? Tutorial"
-│   ├── componentes.py       # peças reutilizáveis (botões, selos, listas, recados)
-│   ├── estilo.py            # cores, fontes e folha de estilo (QSS)
-│   └── relatorio_html.py    # monta o HTML do relatório
+├── main.py                  # abre o programa (servidor + navegador)
+├── api/
+│   ├── main.py              # todas as rotas (/api/...); também serve o front compilado
+│   ├── sessoes.py           # token de login e o usuário de cada requisição
+│   └── serializadores.py    # objetos dos services -> JSON
+├── frontend/
+│   ├── package.json, vite.config.ts, index.html
+│   └── src/
+│       ├── main.tsx, App.tsx      # rotas das telas e proteção por perfil
+│       ├── api.ts, tipos.ts       # chamadas à API e tipos
+│       ├── ui.tsx                 # menu lateral, botões, selos, diálogos, avisos
+│       ├── auth.tsx               # sessão do usuário no navegador
+│       ├── estilo.css             # visual (cores, tipografia, tema claro/escuro)
+│       ├── tutoriais.json         # textos dos botões "Tutorial"
+│       └── paginas/               # Acesso, AlunoTurmas, AlunoTurma, AlunoPesquisa, AlunoInteracao,
+│                                  # ProfTurmas, ProfTurma, ProfPesquisas, ProfRevisao,
+│                                  # ProfInteracao, Relatorio (+ fonte.tsx e linhas.tsx compartilhados)
 ├── services/                # usuario, turma, grupo, pesquisa, interacao, fonte, relatorio, revisao
 │   ├── erros.py             # RegraViolada
 │   ├── sessao.py            # quem está logado
 │   └── seguranca.py         # hash de senha
 ├── repository/
 │   ├── models/              # uma classe por coleção (Usuario, Turma, Pesquisa...)
-│   ├── armazenamento.py     # FirestoreStore (nuvem) e MemoryStore (testes); lotes e unicidade
+│   ├── armazenamento.py     # FirestoreStore (nuvem) e MemoryStore (testes/demo); lotes e unicidade
 │   ├── carga.py             # monta objetos com o que a tela precisa (no lugar dos JOINs)
 │   ├── cascata.py           # exclusão em cascata (turma, pesquisa, interação...)
 │   └── *_repository.py      # consultas de cada entidade
 ├── scripts/
 │   ├── verificar_firebase.py  # confere a conexão com o Firebase
-│   └── popular_exemplo.py     # dados de exemplo
+│   ├── popular_exemplo.py     # dados de exemplo no Firebase
+│   └── demo.py                # modo demonstração: sem Firebase, dados só na memória
 ├── firestore.rules          # regras do Firestore (bloqueiam acesso direto de fora)
 ├── firebase.json            # configuração do Firebase CLI / emulador (opcional)
-├── tests/                   # testes automatizados (serviços, telas e armazenamento)
+├── tests/                   # testes automatizados (services, API e armazenamento)
 ├── pytest.ini
 └── requirements.txt
 ```
@@ -139,10 +138,10 @@ Firebase (Cloud Firestore, na internet)
 Exemplo, o professor devolve uma pesquisa:
 
 1. O professor clica em **Devolver ao aluno**. A tela abre um formulário pedindo a mensagem.
-2. A **tela** chama `RevisaoService.devolver(...)`.
+2. O **front** envia `POST /api/professor/pesquisas/{id}/devolucao` e a **rota** chama `RevisaoService.devolver(...)`.
 3. O **service** confere que quem está logado é professor, que a pesquisa está *entregue* e que a mensagem não está vazia.
 4. O **repository** grava a mensagem e a data, muda o status para *em andamento* e limpa a data de entrega, numa só gravação no Firestore.
-5. Se alguma regra for violada, o service levanta `RegraViolada` e a tela mostra a mensagem dentro do formulário, sem fechar o programa.
+5. Se alguma regra for violada, o service levanta `RegraViolada`, a API responde com erro 400 e a mensagem, e o front a mostra dentro do formulário, sem fechar nada.
 
 ### Modelo de dados
 
@@ -169,31 +168,74 @@ Cada linha da tabela é uma **coleção** do Firestore (`usuarios`, `turmas`, `m
 
 ## 3. Como rodar o código e os testes
 
-**Requisitos:** Python 3.11+, internet e uma conta Google (para o Firebase).
+**Requisitos:** Python 3.11+, **Node.js 20+** (para compilar o front-end), internet e uma conta Google (para o Firebase).
 
-### Rodar do zero
+### Ver funcionando em 2 minutos (sem Firebase)
+
+O modo demonstração usa um banco só na memória, já com dados de exemplo. Nada é gravado e tudo some ao fechar.
+
+```bash
+# 1. dependências do servidor (Windows; no Linux/macOS use: source .venv/bin/activate)
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+
+# 2. compilar o front-end (uma vez, e de novo quando mudar algo em frontend/)
+cd frontend
+npm install
+npm run build
+cd ..
+
+# 3. subir a demonstração e abrir http://127.0.0.1:8000
+python -m scripts.demo
+```
+
+Entre com `ana@exemplo.com` (aluna) ou `marina@exemplo.com` (professora), senha `senha123`.
+
+### Rodar do zero com o Firebase
 
 ```bash
 # 1. clonar e entrar na pasta
 git clone <url-do-repositorio>
 cd <pasta-do-projeto>
 
-# 2. criar e ativar o ambiente virtual (Windows)
+# 2. ambiente virtual e dependências do servidor (Windows)
 python -m venv .venv
 .venv\Scripts\activate
-
-# 3. instalar as dependências
 pip install -r requirements.txt
 
-# 4. configurar o Firebase (seção abaixo): criar o projeto, o banco e baixar a chave JSON,
+# 3. configurar o Firebase (seção abaixo): criar o projeto, o banco e baixar a chave JSON,
 #    depois copiar .env.example para .env e preencher FIREBASE_CREDENCIAIS
 
-# 5. conferir a conexão e abrir o programa
+# 4. conferir a conexão com o Firebase
 python -m scripts.verificar_firebase
+
+# 5. compilar o front-end (uma vez)
+cd frontend
+npm install
+npm run build
+cd ..
+
+# 6. abrir o programa (sobe o servidor e abre o navegador em http://127.0.0.1:8000)
 python main.py
 ```
 
-No Linux/macOS, ative com `source .venv/bin/activate`.
+No Linux/macOS, ative o ambiente com `source .venv/bin/activate`.
+
+### Desenvolvendo o front-end (recarga automática)
+
+Use dois terminais:
+
+```bash
+# terminal 1: o servidor Python (porta 8000); para dados de teste sem Firebase use: python -m scripts.demo
+python -m uvicorn api.main:app --reload --port 8000
+
+# terminal 2: o front com recarga automática (http://localhost:5173)
+cd frontend
+npm run dev
+```
+
+O Vite repassa tudo que começa com `/api` para o servidor Python. A documentação interativa da API fica em <http://127.0.0.1:8000/docs>.
 
 ### Firebase: criar o banco (uma vez por projeto)
 
@@ -249,7 +291,7 @@ Basta **uma pessoa do grupo** fazer os passos 1 a 6; todos os integrantes usam o
 python main.py
 ```
 
-Na primeira vez, clique em **Criar conta** e cadastre um aluno e um professor para ver as duas áreas. Para testar o fluxo completo: com o professor, crie uma turma e copie o código; com o aluno, entre na turma pelo código, crie uma pesquisa, registre uma interação com fontes e use **Entregar para o professor**; depois saia, entre como professor e revise.
+(É preciso ter compilado o front antes: `cd frontend && npm install && npm run build`.) Na primeira vez, clique em **Criar conta** e cadastre um aluno e um professor para ver as duas áreas. Para testar o fluxo completo: com o professor, crie uma turma e copie o código; com o aluno, entre na turma pelo código, crie uma pesquisa, registre uma interação com fontes e use **Entregar para o professor**; depois saia, entre como professor e revise.
 
 ### Dados de exemplo (para testar sem cadastrar tudo)
 
@@ -267,14 +309,14 @@ Todos os e-mails são `@exemplo.com` e a senha é `senha123` (por exemplo `marin
 pytest -v
 ```
 
-- Cobrem as regras (services e repositórios) e as telas (a janela é aberta de verdade, sem aparecer no monitor, e os testes clicam e digitam nela).
+- Cobrem as regras (services e repositórios) e a **API** (`tests/test_api.py` faz o mesmo fluxo que o front: cadastro, login, turma, pesquisa, interação, fontes, entrega, revisão, grupos e convites, incluindo permissões por perfil).
 - **Não usam o Firebase:** cada teste roda sobre um banco em memória (`MemoryStore`) novo. Não precisam de internet nem de chave, e **nunca tocam nos dados reais**.
 - `tests/test_armazenamento_contrato.py` roda as mesmas verificações no `MemoryStore` e no `FirestoreStore` (este contra um cliente Firestore falso que imita os limites reais: 500 operações por lote, 30 valores no filtro `in`, erros de "já existe"). Se você tiver Java e o `firebase-tools`, dá para rodar também contra o **emulador oficial** do Firestore: `firebase emulators:start --only firestore` em um terminal e, em outro, `FIRESTORE_EMULATOR_HOST=localhost:8080 pytest tests/test_armazenamento_contrato.py`.
 
 Comandos úteis:
 
 ```bash
-pytest tests/test_ui.py -v             # só as telas
+pytest tests/test_api.py -v            # só a API
 pytest -k "fonte" -v                   # testes cujo nome contém "fonte"
 pytest -x                              # para no primeiro erro
 pytest --collect-only -q               # lista os testes sem rodar
@@ -282,13 +324,9 @@ pytest --collect-only -q               # lista os testes sem rodar
 
 Se o comando `pytest` não for reconhecido, use `python -m pytest -v`.
 
-### Gerar o executável (opcional)
+### Publicar para a turma usar (opcional)
 
-```bash
-pyinstaller --noconsole --name RegistroIA main.py
-```
-
-O programa continua lendo o `.env` (coloque-o ao lado do executável) e precisa do arquivo JSON da chave do Firebase no caminho indicado nele. Não inclua a chave dentro da pasta distribuída para outras pessoas.
+O servidor é um programa Python comum: em qualquer máquina com Python, `python main.py` (ou `python -m uvicorn api.main:app --host 0.0.0.0 --port 8000`) serve o front compilado e a API juntos. Os logins ficam guardados na memória do servidor (valem 12 horas e somem se ele reiniciar). Se for expor na internet, coloque-o atrás de HTTPS.
 
 ---
 
@@ -324,10 +362,10 @@ O `-u` só é necessário no primeiro push da branch; nos seguintes, basta `git 
 
 ### 4. Abrir o Pull Request
 
-No GitHub, aparecerá o botão **Compare & pull request** para a branch enviada. Abra o PR para a `main`, descreva a mudança e peça revisão de outro integrante antes de fazer o merge. Antes de abrir o PR, rode `pytest -v`.
+No GitHub, aparecerá o botão **Compare & pull request** para a branch enviada. Abra o PR para a `main`, descreva a mudança e peça revisão de outro integrante antes de fazer o merge. Antes de abrir o PR, rode `pytest -v` e `cd frontend && npm run build` (o build confere os tipos do TypeScript).
 
 ### Convenções do código
 
-- Mantenha a regra das camadas: a `ui` nunca acessa o banco; só chama os `services`.
-- Regra de negócio violada vira `raise RegraViolada("mensagem para o usuário")` no service; a tela só mostra a mensagem.
+- Mantenha a regra das camadas: o front só fala com a API; a API só chama `services`; os `services` só usam os `repository`.
+- Regra de negócio violada vira `raise RegraViolada("mensagem para o usuário")` no service; a API devolve 400 com essa mensagem e o front só a mostra.
 - Toda funcionalidade nova leva testes em `tests/`.

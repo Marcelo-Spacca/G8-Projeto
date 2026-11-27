@@ -296,10 +296,14 @@ def conectar():
     FIREBASE_CREDENCIAIS  caminho do arquivo JSON da conta de serviço (baixado no console do Firebase)
     FIREBASE_PROJETO      (opcional) id do projeto; se faltar, é lido do próprio JSON
 
-    Se FIRESTORE_EMULATOR_HOST estiver definido, usa o emulador local do Firebase, sem credenciais."""
+    Se FIRESTORE_EMULATOR_HOST estiver definido, usa o emulador local do Firebase, sem credenciais.
+    Se REGISTRO_IA_BANCO=memoria, não usa o Firebase: os dados ficam só na memória (para demonstração)."""
     from dotenv import load_dotenv
 
     load_dotenv()
+    if os.getenv("REGISTRO_IA_BANCO", "").strip().lower() == "memoria":
+        # modo de demonstração: tudo fica só na memória e some ao fechar o servidor
+        return MemoryStore()
     from google.cloud import firestore
 
     projeto = os.getenv("FIREBASE_PROJETO") or None

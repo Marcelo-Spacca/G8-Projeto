@@ -15,3 +15,7 @@ firebase-*.json
 *chave*.json
 serviceAccount*.json
 credenciais/
+
+# front-end
+frontend/node_modules/
+frontend/dist/
