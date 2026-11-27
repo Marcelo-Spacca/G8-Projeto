@@ -190,8 +190,6 @@ cd ..
 python -m scripts.demo
 ```
 
-Entre com `ana@exemplo.com` (aluna) ou `marina@exemplo.com` (professora), senha `senha123`.
-
 ### Rodar do zero com o Firebase
 
 ```bash
