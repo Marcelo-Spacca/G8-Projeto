@@ -4,12 +4,7 @@ Os testes NÃO usam o Firebase: cada teste roda contra um MemoryStore novo (os d
 memória), então não precisam de internet, de credenciais nem de banco instalado, e nunca mexem em
 dados reais. Para conferir o FirestoreStore de verdade, veja tests/test_firestore_real.py.
 """
-import os
-
 import pytest
-
-# Os testes de tela rodam sem abrir janelas de verdade.
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from repository import armazenamento  # noqa: E402
 from repository.armazenamento import MemoryStore  # noqa: E402
